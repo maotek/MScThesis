@@ -1,0 +1,21 @@
+name: pytorch-cuda
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1
+  - cudatoolkit        # optional fallback
+  - notebook
+  - h5py
+  - pip
+  - pip:
+      - numpy
+      - matplotlib
+      - tqdm
