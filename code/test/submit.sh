@@ -10,13 +10,14 @@
 #SBATCH --gres=gpu
 
 module use /opt/insy/modulefiles # Use DAIC INSY software collection
-module load cuda cudnn miniconda # Load certain versions of cuda and cudnn 
+module load cuda cudnn miniconda # Load certain versions of cuda and cudnn
+
 conda init bash
+
 conda deactivate
+
 conda activate ./envs/env
 
 /usr/bin/nvidia-smi
-
-conda 
 
 srun python script.py
