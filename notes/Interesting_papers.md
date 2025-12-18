@@ -12,3 +12,7 @@
 
 ## Distil-E2D: Distilling Image-to-Depth Priors for Event-Based Monocular Depth Estimation
 -> Interesting to see what gap to find
+
+## Papers to read:
+- A time-related voxel representation method for event camera -> event representation
+- ECSNet: Spatio-temporal feature learning for event camera -> Event representation
