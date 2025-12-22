@@ -5,6 +5,8 @@ channels:
 dependencies:
   - python=3.9
   - matplotlib
+  - notebook
+  - h5py
   - pip
   - pip:
     - -r requirements.txt

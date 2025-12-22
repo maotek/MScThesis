@@ -1,3 +1,9 @@
 --extra-index-url https://download.pytorch.org/whl/cu123
 torch
-annoy
+torchvision
+torchaudio
+numpy
+tqdm
+gradio_imageslider
+gradio==4.29.0
+opencv-python
