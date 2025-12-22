@@ -1,5 +1,5 @@
 ## Connecting to DAIC
-Connect to TU Delft eduroam or use EduVPN.\
+Connect to TU Delft eduroam or use EduVPN.
 ```
 ssh maoshengjiang@login.daic.tudelft.nl
 ```
@@ -41,8 +41,9 @@ limactl create \
   --arch x86_64 \
   --vm-type=qemu \
   template://ubuntu
-
-
+```
+Or use yaml file to increase RAM (apparantly crashes without)
+```
 limactl create --name apptainer apptainer.yaml
 ```
 
@@ -55,10 +56,11 @@ apt-get install -y apptainer
 
 ## Build the image
 ```
-apptainer build image.sif Apptainer.def
+apptainer build image2.sif Apptainer2.def
 ```
 
 ## Test it out on DAIC
+For testing CUDA, use sinteractive and then test torch.cuda.is_available()
 ```
-apptainer exec demo-env-image.sif which python
+apptainer exec image.sif which python
 ```
