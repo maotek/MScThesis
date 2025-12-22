@@ -11,7 +11,6 @@ dependencies:
   - torchvision
   - torchaudio
   - pytorch-cuda=12.1
-  - cudatoolkit        # optional fallback
   - notebook
   - h5py
   - pip

@@ -2,14 +2,15 @@ Bootstrap: docker
 From: condaforge/miniforge3:latest
 
 %files
-    pytorch-cuda.yaml /pytorch-cuda.yaml
+    environment.yml /environment.yml
+    requirements.txt /requirements.txt
 
 %post
     # Update and install necessary packages
     apt-get update && apt-get install -y tree time vim ncdu speedtest-cli build-essential
 
     # Create a new Conda environment using the environment files.
-    mamba env create -f /pytorch-cuda.yaml
+    mamba env create --quiet --file /environment.yml
     
     # Clean up
     apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -17,4 +18,4 @@ From: condaforge/miniforge3:latest
 
     # Now add the script to activate the Conda environment
     echo '. "/opt/conda/etc/profile.d/conda.sh"' >> $APPTAINER_ENVIRONMENT
-    echo 'conda activate pytorch-cuda' >> $APPTAINER_ENVIRONMENT
+    echo 'conda activate apptainer' >> $APPTAINER_ENVIRONMENT
