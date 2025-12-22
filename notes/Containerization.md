@@ -41,11 +41,16 @@ limactl create \
   --arch x86_64 \
   --vm-type=qemu \
   template://ubuntu
+
+
+limactl create --name apptainer apptainer.yaml
 ```
 
-## Start the image
+## Install apptainer
 ```
-
+add-apt-repository -y ppa:apptainer/ppa
+apt-get update
+apt-get install -y apptainer
 ```
 
 ## Build the image
