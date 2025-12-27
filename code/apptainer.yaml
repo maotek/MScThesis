@@ -1,8 +1,8 @@
 arch: "x86_64"
 vmType: "qemu"
 
-memory: "8GiB"
-cpus: 6
+memory: "12GiB"
+cpus: 8
 
 images:
   - location: "https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img"
