@@ -1,0 +1,12 @@
+name: apptainer
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - matplotlib
+  - notebook
+  - h5py
+  - pip
+  - pip:
+    - -r requirements.txt
