@@ -52,7 +52,7 @@ apt-get install -y apptainer
 
 ## Build the image
 ```
-apptainer build image2.sif Apptainer2.def
+apptainer build image3.sif Apptainer2.def
 ```
 
 ## Test it out on DAIC
@@ -62,5 +62,5 @@ module load miniconda cuda cudnn
 
 sinteractive --cpus-per-task=1 --mem=8000 --time=00:30:00 --gres=gpu
 
-apptainer exec --nv apptainer/image.sif python train.py
+apptainer exec --nv apptainer/image3.sif python train.py
 ```
