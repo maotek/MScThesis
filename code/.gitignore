@@ -4,7 +4,7 @@
 /Depth-Anything-V2/vis_depth
 **.sif
 
-**.DS_Store
+.DS_Store
 **/__pycache__/
 **/*.pyc
 **/*.pyo

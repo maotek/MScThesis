@@ -69,4 +69,5 @@ module load miniconda cuda cudnn
 sinteractive --cpus-per-task=1 --mem=8000 --time=00:30:00 --gres=gpu
 
 apptainer exec --nv apptainer/image3.sif python train.py
+apptainer shell --nv apptainer/image.sif
 ```
