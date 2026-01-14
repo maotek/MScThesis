@@ -12,26 +12,31 @@ The dataset supports:
 - Data augmentation
 - Self-supervised learning modes
 
-DSEC Dataset Structure (current layout):
-seq_name (e.g. interlaken_00_c)
-├── disparity_timestamps.txt
-├── image_timestamps.txt
-├── <seq_name>_disparity_event/
-│   ├── 000000.png
-│   └── ...
-├── <seq_name>_images_rectified_left/
-│   ├── 000000.png
-│   └── ...
-├── <seq_name>_events_left/
-│   ├── events.h5
-│   └── rectify_map.h5
-└── calibration/
+DSEC Dataset Structure:
+seq_name (e.g. zurich_city_11_a)
+├── disparity
+│   ├── event
+│   │   ├── 000000.png
+│   │   └── ...
+│   └── timestamps.txt
+├── images
+│   ├── left
+│   │   ├── ev_inf
+│   │   └── ...
+│   └── timestamps.txt
+├── events
+│   ├── left
+│   │   ├── events.h5
+│   │   └── rectify_map.h5
+│   └── right
+│       ├── events.h5
+│       └── rectify_map.h5
+└── calibration
     └── cam_to_cam.yaml
 """
 
 import os.path
 from pathlib import Path
-from typing import Optional
 import weakref
 import cv2
 import h5py
@@ -112,7 +117,7 @@ class DsecSequence(Dataset):
         sequence_path: str,
         event_representation: EventRepresentation,
         time_window_ms: int,
-        augmentator: Optional[Augmentator] = None,
+        augmentator: Augmentator | None = None,
         load_images: bool = False,
         overfit: bool = False,
         sequence_window: int = 1,
@@ -173,15 +178,11 @@ class DsecSequence(Dataset):
     def _load_timestamps(self, sequence_path: str) -> None:
         """Load timestamp data from the sequence directory."""
         # Load disparity timestamps (skip first frame as no events precede it)
-        # Project layout: sequence_path/{disparity_timestamps.txt, image_timestamps.txt, *_disparity_event/*.png, *_images_rectified_left/*.png}
-        disparity_timestamp_path = os.path.join(sequence_path, "disparity_timestamps.txt")
-        # Skip the first timestamp to match disparity file count
+        disparity_timestamp_path = os.path.join(sequence_path, "disparity", "timestamps.txt")
         self.timestamps_disparity = np.loadtxt(disparity_timestamp_path, dtype="int64")[1:]
 
-        print(f"Loaded {len(self.timestamps_disparity)} disparity timestamps.")
-
         # Load RGB timestamps
-        rgb_timestamp_path = os.path.join(sequence_path, "image_timestamps.txt")
+        rgb_timestamp_path = os.path.join(sequence_path, "images", "timestamps.txt")
         self.timestamps_rgb = np.loadtxt(rgb_timestamp_path, dtype="int64")
 
         # In self-supervised mode, use RGB timestamps for disparity
@@ -194,8 +195,8 @@ class DsecSequence(Dataset):
     def _setup_data_paths(self, sequence_path: str) -> None:
         """Setup paths for disparity/depth and image data."""
         if not self.self_supervised:
-            # Project layout uses '<seq>_disparity_event'
-            self.base_disparity_path = os.path.join(sequence_path, f"{Path(sequence_path).name}_disparity_event")
+            # Standard mode: use disparity maps from event-based estimation
+            self.base_disparity_path = os.path.join(sequence_path, "disparity", "event")
         else:
             # Self-supervised mode: use depth predictions
             self.base_disparity_path = os.path.join(
@@ -203,8 +204,7 @@ class DsecSequence(Dataset):
             )
 
         if self.load_images:
-            # Project layout uses '<seq>_images_rectified_left'
-            self.base_left_images_path = os.path.join(sequence_path, f"{Path(sequence_path).name}_images_rectified_left")
+            self.base_left_images_path = os.path.join(sequence_path, "images", "left", "ev_inf")
 
     def _load_disparity_files(self) -> None:
         """Load and sort disparity/depth files."""
@@ -271,7 +271,7 @@ class DsecSequence(Dataset):
             self.disparity_aligned_event_windows.append(
                 (timestamp - delta_t_us, timestamp)
             )
-            
+
         # Create event windows aligned with RGB timestamps if needed
         self.rgb_aligned_event_windows = []
         if self.load_images:
@@ -283,15 +283,14 @@ class DsecSequence(Dataset):
     def _load_event_data(self, sequence_path: str) -> None:
         """Load event data files and rectification maps."""
         # Load event files (currently only left camera supported)
-        event_left_dir = os.path.join(sequence_path, f"{Path(sequence_path).name}_events_left")
         event_file = {
-            "left": h5py.File(os.path.join(event_left_dir, "events.h5"), "r"),
+            "left": h5py.File(os.path.join(sequence_path, "events", "left", "events.h5"), "r"),
         }
 
         # Load rectification maps for event cameras
         self.rectify_event_maps = {}
         for stereo in ["left"]:
-            rectify_path = os.path.join(event_left_dir, "rectify_map.h5")
+            rectify_path = os.path.join(sequence_path, "events", stereo, "rectify_map.h5")
             with h5py.File(rectify_path, "r") as h5_rect:
                 # Load rectification map data
                 rectify_data = h5_rect["rectify_map"]
@@ -308,8 +307,7 @@ class DsecSequence(Dataset):
 
     def _load_calibration(self, sequence_path: str) -> None:
         """Load camera calibration parameters from YAML file."""
-        seq_name = Path(sequence_path).name
-        cam_to_cam_path = os.path.join(sequence_path, f"{seq_name}_calibration", "cam_to_cam.yaml")
+        cam_to_cam_path = os.path.join(sequence_path, "calibration", "cam_to_cam.yaml")
         
         with open(cam_to_cam_path, "r") as file:
             cam_to_cam = yaml.safe_load(file)

@@ -43,6 +43,12 @@ Or use yaml file to increase RAM (apparantly crashes without)
 limactl create --name apptainer apptainer.yaml
 ```
 
+## Start the VM
+```
+limactl start apptainer
+limactl shell apptainer
+```
+
 ## Install apptainer in the VM
 ```
 add-apt-repository -y ppa:apptainer/ppa

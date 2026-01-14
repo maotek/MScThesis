@@ -23,4 +23,3 @@ build/
 *.swo
 datasets/DSEC/data
 **/**.pth
-depthanyevent/
