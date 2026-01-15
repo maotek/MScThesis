@@ -5,13 +5,17 @@ from typing import Dict, Tuple, Optional
 import numpy as np
 import torch
 import tqdm
-import matplotlib.pyplot as plt
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events import Tencode
-from networks.dav2_wrapper import Dav2Wrapper
-from evaluation import add_to_metrics
+from datasets.events import Histogram, Tencode
+from networks.dav2_wrapper import Dav2Wrapper, Dav2InferWrapper
+from evaluation import (
+    add_to_metrics,
+    prepare_target_data,
+    prepare_target_data_torch,
+)
+from losses import normalized_depth_scale_and_shift
 
 
 def sanitize_prediction(prediction: np.ndarray, clip_distance: float) -> np.ndarray:
@@ -42,7 +46,29 @@ def parse_args() -> argparse.Namespace:
         help="Specific sequence names to evaluate; if omitted, auto-detects subfolders in dsec-root.",
     )
     parser.add_argument("--time-window-ms", type=int, default=50, help="Event window size for tencode.")
+    parser.add_argument(
+        "--representation",
+        type=str,
+        choices=("tencode", "histogram"),
+        default="tencode",
+        help="Event representation to use (tencode or histogram).",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=("dav2", "dav2_infer"),
+        default="dav2",
+        help="Model type: dav2 (standard forward) or dav2_infer (Imagenet-normalized infer_image).",
+    )
     parser.add_argument("--clip-distance", type=float, default=80.0, help="Max depth value for metrics.")
+    parser.add_argument("--use-scaleshift", action="store_true", default=True, help="Apply scale+shift alignment.")
+    parser.add_argument(
+        "--csv-path",
+        type=str,
+        default=None,
+        help="Optional CSV file to save metrics; defaults to output/evaluate_<model>_<rep>.csv",
+    )
+    parser.add_argument("--erase-csv", action="store_true", default=False, help="Remove existing CSV before writing.")
     parser.add_argument(
         "--device",
         type=str,
@@ -62,9 +88,18 @@ def select_device(device_str: Optional[str]) -> torch.device:
     return torch.device("cpu")
 
 
-def make_dataset(sequence_path: str, time_window_ms: int) -> DsecSequence:
+def make_representation(representation: str):
+    representation = representation.lower()
+    if representation == "tencode":
+        return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
+    if representation == "histogram":
+        return Histogram(height=DSEC_HEIGHT, width=DSEC_WIDTH, remove_int_artifact=False)
+    raise ValueError(f"Unsupported representation: {representation}")
 
-    rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
+
+def make_dataset(sequence_path: str, time_window_ms: int, representation: str) -> DsecSequence:
+
+    rep = make_representation(representation)
 
     dataset = DsecSequence(
         sequence_path=sequence_path,
@@ -92,6 +127,18 @@ def list_sequences(dsec_root: str) -> Tuple[str, ...]:
     return tuple(seqs)
 
 
+def _write_csv_header(path: str, keys: Tuple[str, ...]) -> None:
+    header = ["SEQ", "FRAMES", *[k.upper() for k in keys]]
+    with open(path, "w") as f:
+        f.write(",".join(header) + "\n")
+
+
+def _write_csv_row(path: str, seq: str, frames: int, keys: Tuple[str, ...], metrics: Dict[str, float]) -> None:
+    row = [seq, str(frames), *[f"{metrics[k]:.6f}" for k in keys]]
+    with open(path, "a") as f:
+        f.write(",".join(row) + "\n")
+
+
 def evaluate_sequence(
     seq_name: str,
     dsec_root: str,
@@ -99,58 +146,48 @@ def evaluate_sequence(
     device: torch.device,
     time_window_ms: int,
     clip_distance: float,
+    use_scaleshift: bool,
+    representation: str,
 ) -> Tuple[Dict[str, float], int]:
     sequence_path = os.path.join(dsec_root, seq_name)
     if not os.path.isdir(sequence_path):
         raise FileNotFoundError(f"Sequence folder not found: {sequence_path}")
-    dataset = make_dataset(sequence_path, time_window_ms)
+    dataset = make_dataset(sequence_path, time_window_ms, representation)
 
     metrics_sum: Dict[str, float] = {}
     num_frames = len(dataset)
-
-    preview_root = os.path.join("output", "eval_preview")
-
-    def _save_depth(img: np.ndarray, path: str) -> None:
-        img_norm = (img - img.min()) / (img.max() - img.min() + 1e-8)
-        plt.imsave(path, img_norm, cmap="viridis")
+    # num_frames = 50
 
     for idx in tqdm.tqdm(range(num_frames), desc=f"{seq_name}", leave=False):
         sample = dataset[idx]
 
-        target_depth = sample["depth"][0].numpy()
+        target_depth_t = sample["depth"][0].to(device)  # (1,H,W)
         events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
-
-        pred_depth = model(events)
-        pred_depth_np = pred_depth.squeeze(0).squeeze(0).detach().cpu().numpy()
-
-        if idx == 0:
-            before_dir = os.path.join(preview_root, "before_prep")
-            os.makedirs(before_dir, exist_ok=True)
-            _save_depth(pred_depth_np, os.path.join(before_dir, f"{seq_name}_pred.png"))
-            _save_depth(target_depth.squeeze(), os.path.join(before_dir, f"{seq_name}_target.png"))
-
-        print("min max before prep:", np.min(target_depth), np.max(target_depth), np.min(pred_depth_np), np.max(pred_depth_np))
         
-        target_proc = sanitize_target(target_depth, clip_distance)
-        pred_proc = sanitize_prediction(pred_depth_np, clip_distance)
-        print("min max after prep:", np.min(target_proc), np.max(target_proc), np.min(pred_proc), np.max(pred_proc))
+        if representation.lower() == "histogram" and events.shape[1] == 2:
+            events = torch.cat([events, torch.zeros_like(events[:, :1])], dim=1)  # Pad histogram to 3 channels
 
-        if idx == 0:
-            after_dir = os.path.join(preview_root, "after_prep")
-            os.makedirs(after_dir, exist_ok=True)
-            _save_depth(pred_proc.squeeze(), os.path.join(after_dir, f"{seq_name}_pred.png"))
-            _save_depth(target_proc.squeeze(), os.path.join(after_dir, f"{seq_name}_target.png"))
+        pred_depth = model(events)  # (1,1,H,W)
+        pred_depth = pred_depth.squeeze(1)  # (1,H,W)
 
-        target_proc = np.squeeze(target_proc)
-        pred_proc = np.squeeze(pred_proc)
-        assert target_proc.ndim == 2 and pred_proc.ndim == 2, "Depth tensors must be 2D (H,W) after squeezing"
-        mask = np.ones_like(target_proc, dtype=bool)
+        target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
+
+        if use_scaleshift:
+            scale, shift = normalized_depth_scale_and_shift(
+                pred_depth, target_proc_t, target_proc_t > 0
+            )
+            pred_depth = scale[:, None, None] * pred_depth + shift[:, None, None]
+
+        pred_np = np.clip(pred_depth.detach().cpu().squeeze().numpy(), 0, clip_distance)
+        target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), clip_distance)
+
+        mask = np.ones_like(target_np, dtype=bool)
 
         metrics_sum = add_to_metrics(
             idx,
             metrics_sum,
-            target_proc,
-            pred_proc,
+            target_np,
+            pred_np,
             mask,
             event_frame=None,
             prefix="_",
@@ -159,13 +196,13 @@ def evaluate_sequence(
         )
 
         for depth_threshold in (10, 20, 30):
-            threshold_mask = np.nan_to_num(target_proc) < depth_threshold
+            threshold_mask = np.nan_to_num(target_np) < depth_threshold
             combined_mask = mask & threshold_mask
             metrics_sum = add_to_metrics(
                 -1,
                 metrics_sum,
-                target_proc,
-                pred_proc,
+                target_np,
+                pred_np,
                 combined_mask,
                 event_frame=None,
                 prefix=f"_{depth_threshold}_",
@@ -186,12 +223,31 @@ def main() -> None:
     args = parse_args()
     device = select_device(args.device)
 
-    model = Dav2Wrapper(
-        encoder="vitb",
-        checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
-        device=device,
-        input_size=518,
-    )
+    # Default CSV path incorporates model and representation for clarity
+    if args.csv_path is None:
+        args.csv_path = os.path.join("output", f"evaluate_{args.model}_{args.representation}.csv")
+
+    print(f"Evaluation using representation: {args.representation}, model: {args.model}, output CSV: {args.csv_path}, device: {device}")
+
+    if args.csv_path and args.erase_csv and os.path.exists(args.csv_path):
+        os.remove(args.csv_path)
+
+    if args.model == "dav2":
+        model = Dav2Wrapper(
+            encoder="vitb",
+            checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
+            device=device,
+            input_size=518,
+        )
+    elif args.model == "dav2_infer":
+        model = Dav2InferWrapper(
+            encoder="vitb",
+            checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
+            device=device,
+            input_size=518,
+        )
+    else:
+        raise ValueError(f"Unsupported model: {args.model}")
 
     overall_sum: Dict[str, float] = {}
     overall_frames = 0
@@ -206,6 +262,8 @@ def main() -> None:
             device=device,
             time_window_ms=args.time_window_ms,
             clip_distance=args.clip_distance,
+            use_scaleshift=args.use_scaleshift,
+            representation=args.representation,
         )
 
         overall_sum = accumulate_metrics(overall_sum, metrics_sum)
@@ -216,12 +274,24 @@ def main() -> None:
         for k in sorted(seq_avg.keys()):
             print(f"  {k}: {seq_avg[k]:.6f}")
 
+        if args.csv_path:
+            keys = tuple(sorted(seq_avg.keys()))
+            if not os.path.exists(args.csv_path):
+                _write_csv_header(args.csv_path, keys)
+            _write_csv_row(args.csv_path, seq_name, frames, keys, seq_avg)
+
     if overall_frames > 0:
         overall_avg = {k: v / overall_frames for k, v in overall_sum.items()}
         print("\n================ Overall (validation) ===============")
         print(f"Frames: {overall_frames}")
         for k in sorted(overall_avg.keys()):
             print(f"{k}: {overall_avg[k]:.6f}")
+
+        if args.csv_path:
+            keys = tuple(sorted(overall_avg.keys()))
+            if not os.path.exists(args.csv_path):
+                _write_csv_header(args.csv_path, keys)
+            _write_csv_row(args.csv_path, "MEAN", overall_frames, keys, overall_avg)
 
 
 if __name__ == "__main__":

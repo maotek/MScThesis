@@ -399,6 +399,8 @@ def add_to_metrics(idx, metrics, target_, prediction_, mask, event_frame=None,
 
     # Combine all masks
     valid_mask = mask & depth_mask & prediction_mask
+    if not np.any(valid_mask):
+        return metrics
     eps = 1e-5  # Small epsilon to avoid division by zero
 
     # Extract valid pixels only
@@ -448,34 +450,42 @@ def add_to_metrics(idx, metrics, target_, prediction_, mask, event_frame=None,
         fig, ax = plt.subplots(ncols=3, nrows=4, figsize=(15, 20))
         
         # Row 1: Basic depth visualization
-        ax[0, 0].imshow(target_, vmin=0, vmax=200, cmap='viridis')
+        img_gt = ax[0, 0].imshow(target_, vmin=0, vmax=200, cmap='viridis')
         ax[0, 0].set_title("Ground Truth Depth")
+        fig.colorbar(img_gt, ax=ax[0, 0])
         
-        ax[0, 1].imshow(prediction_, vmin=0, vmax=200, cmap='viridis')
+        img_pred = ax[0, 1].imshow(prediction_, vmin=0, vmax=200, cmap='viridis')
         ax[0, 1].set_title("Predicted Depth")
+        fig.colorbar(img_pred, ax=ax[0, 1])
         
         target_debug = target_.copy()
         target_debug[~valid_mask] = 0
-        ax[0, 2].imshow(target_debug, vmin=0, vmax=200, cmap='viridis')
+        img_gt_mask = ax[0, 2].imshow(target_debug, vmin=0, vmax=200, cmap='viridis')
         ax[0, 2].set_title("Ground Truth (Masked)")
+        fig.colorbar(img_gt_mask, ax=ax[0, 2])
 
         # Row 2: Logarithmic visualization
-        ax[1, 0].imshow(np.log(target_ + eps), vmin=0, vmax=np.log(200), cmap='plasma')
+        img_log_gt = ax[1, 0].imshow(np.log(target_ + eps), vmin=0, vmax=np.log(200), cmap='plasma')
         ax[1, 0].set_title("Log Ground Truth")
+        fig.colorbar(img_log_gt, ax=ax[1, 0])
         
-        ax[1, 1].imshow(np.log(prediction_ + eps), vmin=0, vmax=np.log(200), cmap='plasma')
+        img_log_pred = ax[1, 1].imshow(np.log(prediction_ + eps), vmin=0, vmax=np.log(200), cmap='plasma')
         ax[1, 1].set_title("Log Prediction")
+        fig.colorbar(img_log_pred, ax=ax[1, 1])
         
-        ax[1, 2].imshow(np.max(np.stack([target_ / (prediction_ + eps), 
-                                       prediction_ / (target_ + eps)]), axis=0), cmap='jet')
+        img_ratio = ax[1, 2].imshow(np.max(np.stack([target_ / (prediction_ + eps), 
+                           prediction_ / (target_ + eps)]), axis=0), cmap='jet')
         ax[1, 2].set_title("Max Ratio")
+        fig.colorbar(img_ratio, ax=ax[1, 2])
 
         # Row 3: Error visualization
-        ax[2, 0].imshow(np.abs(np.log(target_ + eps) - np.log(prediction_ + eps)), cmap='hot')
+        img_log_diff = ax[2, 0].imshow(np.abs(np.log(target_ + eps) - np.log(prediction_ + eps)), cmap='hot')
         ax[2, 0].set_title("Absolute Log Difference")
+        fig.colorbar(img_log_diff, ax=ax[2, 0])
         
-        ax[2, 1].imshow(np.abs(target_ - prediction_), cmap='hot')
+        img_abs_diff = ax[2, 1].imshow(np.abs(target_ - prediction_), cmap='hot')
         ax[2, 1].set_title("Absolute Difference")
+        fig.colorbar(img_abs_diff, ax=ax[2, 1])
         
         # Event frame visualization (if available)
         if event_frame is not None:
@@ -488,16 +498,19 @@ def add_to_metrics(idx, metrics, target_, prediction_, mask, event_frame=None,
         # Row 4: Masked error visualization
         log_diff_masked = np.abs(np.log(target_ + eps) - np.log(prediction_ + eps))
         log_diff_masked[~valid_mask] = 0
-        ax[3, 0].imshow(log_diff_masked, cmap='hot')
+        img_log_diff_mask = ax[3, 0].imshow(log_diff_masked, cmap='hot')
         ax[3, 0].set_title("Abs Log Diff (Masked)")
+        fig.colorbar(img_log_diff_mask, ax=ax[3, 0])
         
         abs_diff_masked = np.abs(target_ - prediction_)
         abs_diff_masked[~valid_mask] = 0
-        ax[3, 1].imshow(abs_diff_masked, cmap='hot')
+        img_abs_diff_mask = ax[3, 1].imshow(abs_diff_masked, cmap='hot')
         ax[3, 1].set_title("Abs Diff (Masked)")
+        fig.colorbar(img_abs_diff_mask, ax=ax[3, 1])
         
-        ax[3, 2].imshow(valid_mask, cmap='gray')
+        img_valid = ax[3, 2].imshow(valid_mask, cmap='gray')
         ax[3, 2].set_title("Valid Pixel Mask")
+        fig.colorbar(img_valid, ax=ax[3, 2])
 
         plt.tight_layout()
         plt.suptitle(f"{prefix}Depth Evaluation - Frame {idx}")

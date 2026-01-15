@@ -151,7 +151,7 @@ def load_datasets(
         postfix=postfix
     )
 
-    print(f"Successfully loaded {len(datasets)} sequence datasets")
+    # print(f"Successfully loaded {len(datasets)} sequence datasets")
     return datasets
 
 

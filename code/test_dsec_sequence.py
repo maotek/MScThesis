@@ -34,7 +34,7 @@ def main():
     )
     parser.add_argument("--index", type=int, default=100, help="Sample index in the sequence")
     parser.add_argument("--time-window-ms", type=int, default=50, help="Event window in milliseconds")
-    parser.add_argument("--output-dir", default="output/dsec_sequence_vis", help="Where to save PNGs")
+    parser.add_argument("--output-dir", default="output/test_dsec_sequence", help="Where to save PNGs")
     parser.add_argument(
         "--load-images",
         choices=["yes", "no"],
@@ -76,6 +76,7 @@ def main():
     events = sample["depth_aligned_events"][0]  # C,H,W
     depth = sample["depth"][0]  # 1,H,W or H,W
     print(f"Sample {args.index}: events shape {events.shape}, depth shape {depth.shape}")
+    print(f"Event min/max: {events.min()}/{events.max()}, Depth min/max: {depth.min()}/{depth.max()}")
 
     # --- Quick test: save Tencode with and without rectification ---
     # Fetch raw events for this timestamp window directly from the EventSlicer
@@ -135,7 +136,6 @@ def main():
     if depth_np.ndim == 3:
         depth_np = depth_np[0]
     depth_vis = depth_np.copy()
-    print(depth_vis.shape, depth_vis.dtype, np.min(depth_vis), np.max(depth_vis))
     if depth_vis.max() > depth_vis.min():
         depth_vis = (depth_vis - depth_vis.min()) / (depth_vis.max() - depth_vis.min())
     else:
@@ -151,7 +151,7 @@ def main():
         rgb = sample["rgb"][0].cpu().numpy()
         rgb = np.clip(rgb, 0.0, 1.0)
         rgb_vis = to_uint8_rgb(rgb.transpose(1, 2, 0))
-        print(f"RGB frame shape: {rgb_vis.shape}")
+        # print(f"RGB frame shape: {rgb_vis.shape}")
 
     # Save combined view (events | depth | rgb) when available
     combined_path = os.path.join(out_dir, f"combined_{args.index:05d}.png")
