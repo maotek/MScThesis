@@ -9,7 +9,7 @@ import torch
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events import Tencode
+from datasets.events import Tencode, TencodePixelCount
 from networks.dav2_wrapper import Dav2Wrapper
 
 
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
         help="Path to a DSEC sequence root (default: datasets/DSEC/data/train/interlaken_00_c)",
     )
     parser.add_argument(
-        "--index", type=int, default=0, help="Index within the sequence to visualize (depth-aligned events)."
+        "--index", type=int, default=10, help="Index within the sequence to visualize (depth-aligned events)."
     )
     parser.add_argument(
         "--encoder",
@@ -94,7 +94,7 @@ def main() -> None:
     args = parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
+    rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     dataset = DsecSequence(
         sequence_path=args.sequence,
         event_representation=rep,

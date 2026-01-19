@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 from typing import Dict, Tuple, Optional
 
 import numpy as np
@@ -8,14 +9,24 @@ import tqdm
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events import Histogram, Tencode
+from datasets.events import Tencode, TencodePixelCount, VoxelGrid
 from networks.dav2_wrapper import Dav2Wrapper, Dav2InferWrapper
+from networks.e2vid_dav2 import E2VIDDav2
+from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from evaluation import (
     add_to_metrics,
     prepare_target_data,
     prepare_target_data_torch,
 )
 from losses import normalized_depth_scale_and_shift
+from util import (
+    depth_to_colormap,
+    save_depth_colormap,
+    save_tencode,
+    save_voxelgrid,
+    tencode_to_uint8,
+    voxelgrid_to_uint8,
+)
 
 
 def sanitize_prediction(prediction: np.ndarray, clip_distance: float) -> np.ndarray:
@@ -35,8 +46,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dsec-root",
         type=str,
-        default="datasets/DSEC/data/validate",
-        help="Root folder containing DSEC validation sequences (default: datasets/DSEC/data/validate)",
+        default="datasets/DSEC/data/train",
+        help="Root folder containing DSEC validation sequences",
     )
     parser.add_argument(
         "--sequences",
@@ -45,35 +56,61 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Specific sequence names to evaluate; if omitted, auto-detects subfolders in dsec-root.",
     )
-    parser.add_argument("--time-window-ms", type=int, default=50, help="Event window size for tencode.")
+    parser.add_argument(
+        "--time-window-ms",
+        type=int,
+        default=50,
+        help="Event window size for tencode.",
+    )
     parser.add_argument(
         "--representation",
         type=str,
-        choices=("tencode", "histogram"),
+        choices=("tencode", "tencode_pixelcount", "voxelgrid"),
         default="tencode",
-        help="Event representation to use (tencode or histogram).",
+        help="Event representation to use (tencode, tencode_pixelcount, voxelgrid).",
     )
     parser.add_argument(
         "--model",
         type=str,
-        choices=("dav2", "dav2_infer"),
+        choices=("dav2", "dav2_infer", "e2vid_dav2", "e2vid_dav2_composite"),
         default="dav2",
-        help="Model type: dav2 (standard forward) or dav2_infer (Imagenet-normalized infer_image).",
+        help="Model type: dav2, dav2_infer, e2vid_dav2 (E2VID->DAV2 depth), or e2vid_dav2_composite (E2VID composite RGB -> DAV2 depth).",
     )
-    parser.add_argument("--clip-distance", type=float, default=80.0, help="Max depth value for metrics.")
-    parser.add_argument("--use-scaleshift", action="store_true", default=True, help="Apply scale+shift alignment.")
+    parser.add_argument(
+        "--clip-distance",
+        type=float,
+        default=80.0,
+        help="Max depth value for metrics.",
+    )
+    parser.add_argument(
+        "--use-scaleshift",
+        action="store_true",
+        default=True,
+        help="Apply scale+shift alignment.",
+    )
     parser.add_argument(
         "--csv-path",
         type=str,
         default=None,
         help="Optional CSV file to save metrics; defaults to output/evaluate_<model>_<rep>.csv",
     )
-    parser.add_argument("--erase-csv", action="store_true", default=False, help="Remove existing CSV before writing.")
+    parser.add_argument(
+        "--erase-csv",
+        action="store_true",
+        default=False,
+        help="Remove existing CSV before writing.",
+    )
     parser.add_argument(
         "--device",
         type=str,
         default=None,
         help="Device string (cuda, mps, cpu). Auto-selects if not provided.",
+    )
+    parser.add_argument(
+        "--vis-interval",
+        type=int,
+        default=200,
+        help="If >0, save visualization every N frames per sequence.",
     )
     return parser.parse_args()
 
@@ -92,8 +129,10 @@ def make_representation(representation: str):
     representation = representation.lower()
     if representation == "tencode":
         return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
-    if representation == "histogram":
-        return Histogram(height=DSEC_HEIGHT, width=DSEC_WIDTH, remove_int_artifact=False)
+    if representation == "tencode_pixelcount":
+        return TencodePixelCount(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
+    if representation == "voxelgrid":
+        return VoxelGrid(channels=5, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
     raise ValueError(f"Unsupported representation: {representation}")
 
 
@@ -127,16 +166,54 @@ def list_sequences(dsec_root: str) -> Tuple[str, ...]:
     return tuple(seqs)
 
 
-def _write_csv_header(path: str, keys: Tuple[str, ...]) -> None:
-    header = ["SEQ", "FRAMES", *[k.upper() for k in keys]]
+def write_csv(path: str, seq_results: list, mean_metrics: Dict[str, float]) -> None:
+    """Write CSV with metrics as rows and sequences as columns plus MEAN."""
+    header = ["METRIC", *[r["name"] for r in seq_results], "MEAN"]
+
+    metric_keys = set(mean_metrics.keys())
+    for r in seq_results:
+        metric_keys.update(r["avg"].keys())
+
     with open(path, "w") as f:
         f.write(",".join(header) + "\n")
+        for k in sorted(metric_keys):
+            row = [k]
+            for r in seq_results:
+                val = r["avg"].get(k)
+                row.append("" if val is None else f"{val:.6f}")
+            mean_val = mean_metrics.get(k)
+            row.append("" if mean_val is None else f"{mean_val:.6f}")
+            f.write(",".join(row) + "\n")
 
 
-def _write_csv_row(path: str, seq: str, frames: int, keys: Tuple[str, ...], metrics: Dict[str, float]) -> None:
-    row = [seq, str(frames), *[f"{metrics[k]:.6f}" for k in keys]]
-    with open(path, "a") as f:
-        f.write(",".join(row) + "\n")
+def events_to_image(events: np.ndarray) -> np.ndarray:
+    """Convert event tensor (C,H,W) to uint8 image for quick visualization."""
+    if events.ndim != 3:
+        raise ValueError("events_to_image expects (C,H,W)")
+    c, h, w = events.shape
+    if c == 3:
+        return tencode_to_uint8(events)
+    return voxelgrid_to_uint8(events)
+
+
+def save_visualization(
+    seq_name: str,
+    idx: int,
+    events: torch.Tensor,
+    pred_np: np.ndarray,
+    vis_dir: str,
+) -> None:
+    seq_dir = os.path.join(vis_dir, seq_name)
+    os.makedirs(seq_dir, exist_ok=True)
+
+    events_chw = events.detach().cpu().squeeze(0)  # (C,H,W)
+    events_path = os.path.join(seq_dir, f"{idx:05d}_events.png")
+    if events_chw.shape[0] == 3:
+        save_tencode(events_path, events_chw)
+    else:
+        save_voxelgrid(events_path, events_chw)
+
+    save_depth_colormap(os.path.join(seq_dir, f"{idx:05d}_pred.png"), pred_np)
 
 
 def evaluate_sequence(
@@ -148,6 +225,8 @@ def evaluate_sequence(
     clip_distance: float,
     use_scaleshift: bool,
     representation: str,
+    vis_interval: int,
+    vis_dir: str,
 ) -> Tuple[Dict[str, float], int]:
     sequence_path = os.path.join(dsec_root, seq_name)
     if not os.path.isdir(sequence_path):
@@ -156,7 +235,6 @@ def evaluate_sequence(
 
     metrics_sum: Dict[str, float] = {}
     num_frames = len(dataset)
-    # num_frames = 50
 
     for idx in tqdm.tqdm(range(num_frames), desc=f"{seq_name}", leave=False):
         sample = dataset[idx]
@@ -164,11 +242,12 @@ def evaluate_sequence(
         target_depth_t = sample["depth"][0].to(device)  # (1,H,W)
         events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
         
-        if representation.lower() == "histogram" and events.shape[1] == 2:
-            events = torch.cat([events, torch.zeros_like(events[:, :1])], dim=1)  # Pad histogram to 3 channels
-
-        pred_depth = model(events)  # (1,1,H,W)
+        pred_depth = model(events)  # (1,1,H,W) or (depth, composite)
+        if isinstance(pred_depth, tuple):
+            pred_depth = pred_depth[0]
+    
         pred_depth = pred_depth.squeeze(1)  # (1,H,W)
+        pred_np_raw = pred_depth.detach().cpu().squeeze().numpy()
 
         target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
 
@@ -194,6 +273,15 @@ def evaluate_sequence(
             debug=False,
             output_folder=None,
         )
+
+        if vis_interval > 0 and idx % vis_interval == 0:
+            save_visualization(
+                seq_name=seq_name,
+                idx=idx,
+                events=events,
+                pred_np=pred_np_raw,
+                vis_dir=vis_dir,
+            )
 
         for depth_threshold in (10, 20, 30):
             threshold_mask = np.nan_to_num(target_np) < depth_threshold
@@ -227,7 +315,27 @@ def main() -> None:
     if args.csv_path is None:
         args.csv_path = os.path.join("output", f"evaluate_{args.model}_{args.representation}.csv")
 
+    # Visualization directory always follows the CSV stem inside /output
+    vis_dir = os.path.join("output", Path(args.csv_path).stem)
+
     print(f"Evaluation using representation: {args.representation}, model: {args.model}, output CSV: {args.csv_path}, device: {device}")
+
+    # Enforce allowed representations per model to avoid downstream shape/compatibility errors
+    allowed_reps = {
+        "dav2": ("tencode", "tencode_pixelcount"),
+        "dav2_infer": ("tencode", "tencode_pixelcount"),
+        "e2vid_dav2": ("voxelgrid",),
+        "e2vid_dav2_composite": ("voxelgrid",),
+    }
+
+    # Check representation compatibility
+    model_key = args.model.lower()
+    rep_key = args.representation.lower()
+    if model_key not in allowed_reps:
+        raise ValueError(f"Unsupported model: {args.model}")
+    if rep_key not in allowed_reps[model_key]:
+        allowed = ", ".join(allowed_reps[model_key])
+        raise ValueError(f"Model {args.model} does not support representation={args.representation}. Supported: {allowed}")
 
     if args.csv_path and args.erase_csv and os.path.exists(args.csv_path):
         os.remove(args.csv_path)
@@ -246,11 +354,26 @@ def main() -> None:
             device=device,
             input_size=518,
         )
+    elif args.model == "e2vid_dav2":
+        model = E2VIDDav2(
+            e2vid_weights=None,
+            dav2_encoder="vitb",
+            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
+            device=device,
+        )
+    elif args.model == "e2vid_dav2_composite":
+        model = E2VIDDav2Composite(
+            e2vid_weights=None,
+            dav2_encoder="vitb",
+            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
+            device=device,
+        )
     else:
         raise ValueError(f"Unsupported model: {args.model}")
 
     overall_sum: Dict[str, float] = {}
     overall_frames = 0
+    seq_results = []
 
     seq_list = args.sequences if args.sequences is not None else list_sequences(args.dsec_root)
 
@@ -264,6 +387,8 @@ def main() -> None:
             clip_distance=args.clip_distance,
             use_scaleshift=args.use_scaleshift,
             representation=args.representation,
+            vis_interval=args.vis_interval,
+            vis_dir=vis_dir,
         )
 
         overall_sum = accumulate_metrics(overall_sum, metrics_sum)
@@ -274,11 +399,7 @@ def main() -> None:
         for k in sorted(seq_avg.keys()):
             print(f"  {k}: {seq_avg[k]:.6f}")
 
-        if args.csv_path:
-            keys = tuple(sorted(seq_avg.keys()))
-            if not os.path.exists(args.csv_path):
-                _write_csv_header(args.csv_path, keys)
-            _write_csv_row(args.csv_path, seq_name, frames, keys, seq_avg)
+        seq_results.append({"name": seq_name, "frames": frames, "avg": seq_avg})
 
     if overall_frames > 0:
         overall_avg = {k: v / overall_frames for k, v in overall_sum.items()}
@@ -288,10 +409,7 @@ def main() -> None:
             print(f"{k}: {overall_avg[k]:.6f}")
 
         if args.csv_path:
-            keys = tuple(sorted(overall_avg.keys()))
-            if not os.path.exists(args.csv_path):
-                _write_csv_header(args.csv_path, keys)
-            _write_csv_row(args.csv_path, "MEAN", overall_frames, keys, overall_avg)
+            write_csv(args.csv_path, seq_results, overall_avg)
 
 
 if __name__ == "__main__":

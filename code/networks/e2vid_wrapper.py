@@ -1,24 +1,16 @@
 import sys
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 
-# Ensure the RPG E2VID repo is on path
-E2VID_ROOT = Path(__file__).resolve().parents[1] / "models" / "rpg_e2vid"
-if str(E2VID_ROOT) not in sys.path:
-    sys.path.insert(0, str(E2VID_ROOT))
-
-from utils.loading_utils import load_model  # type: ignore
-
+from models.rpg_e2vid.model.model import *  # E2VID, E2VIDRecurrent, etc.
 
 def _default_device(device: Optional[torch.device]) -> torch.device:
     if device is not None:
         return device
     if torch.cuda.is_available():
         return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
     return torch.device("cpu")
 
 
@@ -38,14 +30,29 @@ class E2VIDWrapper(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.device = _default_device(device)
-        self.weights_path = weights_path or str(E2VID_ROOT / "pretrained" / "E2VID_lightweight.pth.tar")
+        if weights_path is None:
+            repo_root = Path(__file__).resolve().parents[1] / "models" / "rpg_e2vid"
+            self.weights_path = str(repo_root / "pretrained" / "E2VID_lightweight.pth.tar")
+        else:
+            self.weights_path = weights_path
 
-        self.model = load_model(self.weights_path)
-        self.model.to(self.device)
+        # Load using the repo utility, forcing CPU to avoid CUDA dependency, then move to target device
+        raw_model = torch.load(self.weights_path, map_location="cpu")
+        arch = raw_model["arch"]
+        try:
+            model_type = raw_model["model"]
+        except KeyError:
+            model_type = raw_model["config"]["model"]
+
+        model = eval(arch)(model_type)
+        model.load_state_dict(raw_model["state_dict"])
+
+        self.model = model.to(self.device)
         self.model.eval()
 
         # Determine if the loaded model is recurrent by inspecting attributes
         self.is_recurrent = hasattr(self.model, "unetrecurrent") or "Recurrent" in self.model.__class__.__name__
+        print(f"E2VIDWrapper: loaded model from {self.weights_path} (recurrent={self.is_recurrent})")
         self._states = None
 
     def reset_state(self) -> None:
@@ -58,7 +65,12 @@ class E2VIDWrapper(torch.nn.Module):
         assert events.dim() == 4, "events must be (B,C,H,W)"
 
         events = events.to(self.device)
-        result = self.model(events, self._states) if self.is_recurrent else self.model(events, None)
+
+        # Handle recurrent model
+        # result = self.model(events, self._states) if self.is_recurrent else self.model(events, None)
+
+        # For now, always pass None as states to avoid issues with state management
+        result = self.model(events, None)
 
         if isinstance(result, tuple):
             pred, states = result

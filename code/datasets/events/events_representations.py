@@ -60,38 +60,78 @@ class VoxelGrid(EventRepresentation):
         assert x.shape == y.shape == pol.shape == time.shape
         assert x.ndim == 1
 
+        # C, H, W = self.voxel_grid.shape
+        # with torch.no_grad():
+        #     self.voxel_grid = self.voxel_grid.to(pol.device)
+        #     voxel_grid = self.voxel_grid.clone()
+
+        #     if x.shape[0] == 0:
+        #         return voxel_grid
+
+        #     t_norm = time
+        #     t_norm = (C - 1) * (t_norm-t_norm[0]) / (t_norm[-1]-t_norm[0]) # This normalizes t between 0 and C-1
+
+        #     x0 = x.int() # Let's make the x an integer
+        #     y0 = y.int() # Let's make the y an integer
+        #     t0 = t_norm.int() # Let's make the normalized time an integer
+
+        #     value = 2*pol-1 # Let's make pol from in [0; 1] to in [-1; 1]
+
+        #     for xlim in [x0,x0+1]:
+        #         for ylim in [y0,y0+1]:
+        #             for tlim in [t0,t0+1]:
+
+        #                 mask = (xlim < W) & (xlim >= 0) & (ylim < H) & (ylim >= 0) & (tlim >= 0) & (tlim < self.channels)
+        #                 interp_weights = value * (1 - (xlim-x).abs()) * (1 - (ylim-y).abs()) * (1 - (tlim - t_norm).abs())
+
+        #                 index = H * W * tlim.long() + \
+        #                         W * ylim.long() + \
+        #                         xlim.long()
+
+        #                 voxel_grid.put_(index[mask], interp_weights[mask], accumulate=True)
+
+        #     if self.normalize:
+        #         voxel_grid = self.normalize_fn(voxel_grid)
+
         C, H, W = self.voxel_grid.shape
+        device = x.device
+
         with torch.no_grad():
-            self.voxel_grid = self.voxel_grid.to(pol.device)
+            self.voxel_grid = self.voxel_grid.to(device)
             voxel_grid = self.voxel_grid.clone()
 
-            if x.shape[0] == 0:
+            if x.numel() == 0:
                 return voxel_grid
 
-            t_norm = time
-            t_norm = (C - 1) * (t_norm-t_norm[0]) / (t_norm[-1]-t_norm[0]) # This normalizes t between 0 and C-1
+            # normalize time → [0, C-1]
+            t_norm = (C - 1) * (time - time[0]) / (time[-1] - time[0] + 1e-12)
 
-            x0 = x.int() # Let's make the x an integer
-            y0 = y.int() # Let's make the y an integer
-            t0 = t_norm.int() # Let's make the normalized time an integer
+            x = x.long()
+            y = y.long()
+            t = t_norm.long()
+            val = 2 * pol.float() - 1.0  # [0,1] → [-1,1]
 
-            value = 2*pol-1 # Let's make pol from in [0; 1] to in [-1; 1]
+            # valid mask
+            valid = (x >= 0) & (x < W) & \
+                    (y >= 0) & (y < H) & \
+                    (t >= 0) & (t < C)
 
-            for xlim in [x0,x0+1]:
-                for ylim in [y0,y0+1]:
-                    for tlim in [t0,t0+1]:
+            x, y, t, val = x[valid], y[valid], t[valid], val[valid]
 
-                        mask = (xlim < W) & (xlim >= 0) & (ylim < H) & (ylim >= 0) & (tlim >= 0) & (tlim < self.channels)
-                        interp_weights = value * (1 - (xlim-x).abs()) * (1 - (ylim-y).abs()) * (1 - (tlim - t_norm).abs())
+            # flat voxel index
+            idx = t * (H * W) + y * W + x
 
-                        index = H * W * tlim.long() + \
-                                W * ylim.long() + \
-                                xlim.long()
+            flat = voxel_grid.view(-1)
 
-                        voxel_grid.put_(index[mask], interp_weights[mask], accumulate=True)
+            # deterministic accumulation
+            flat.scatter_add_(0, idx, val)
 
             if self.normalize:
                 voxel_grid = self.normalize_fn(voxel_grid)
+
+            # print(voxel_grid.device)
+            # print(x.sum(), y.sum(), pol.sum(), time.sum())
+            # print(voxel_grid.sum())
 
         return voxel_grid
     
@@ -246,37 +286,94 @@ class Tencode(EventRepresentation):
         assert x.shape == y.shape == pol.shape == time.shape
         assert x.ndim == 1
 
-        if self.white_frame:
-            tencode = torch.full((3, self.height, self.width), 255.0, dtype=torch.float, requires_grad=False)
-        else:
-            tencode = torch.zeros((3, self.height, self.width), dtype=torch.float, requires_grad=False)
+        # if self.white_frame:
+        #     tencode = torch.full((3, self.height, self.width), 255.0, dtype=torch.float, requires_grad=False)
+        # else:
+        #     tencode = torch.zeros((3, self.height, self.width), dtype=torch.float, requires_grad=False)
 
-        if x.shape[0] == 0:
-            return tencode
+        # if x.shape[0] == 0:
+        #     return tencode
+        # with (torch.no_grad()):
+        #     pol = pol.int() # Let's make the polarity an integer {0,1}
 
-        with (torch.no_grad()):
-            pol = pol.int() # Let's make the polarity an integer {0,1}
+        #     t_norm = time
+        #     t_norm = (t_norm-t_norm[0]) / (t_norm[-1]-t_norm[0])
 
-            t_norm = time
-            t_norm = (t_norm-t_norm[0]) / (t_norm[-1]-t_norm[0])
+        #     index_red = (0 * self.width * self.height) + (y.long() * self.width) + x.long()
+        #     index_green = (1 * self.width * self.height) + (y.long() * self.width) + x.long()
+        #     index_blue = (2 * self.width * self.height) + (y.long() * self.width) + x.long()
 
-            index_red = (0 * self.width * self.height) + (y.long() * self.width) + x.long()
-            index_green = (1 * self.width * self.height) + (y.long() * self.width) + x.long()
-            index_blue = (2 * self.width * self.height) + (y.long() * self.width) + x.long()
-
-            mask_red = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_red >= 0) \
-                & (index_red < 3*self.height*self.width)
-            mask_green = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_green >= 0) \
-                & (index_green < 3*self.height*self.width)
-            mask_blue = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_blue >= 0) \
-                & (index_blue < 3*self.height*self.width)
+        #     mask_red = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_red >= 0) \
+        #         & (index_red < 3*self.height*self.width)
+        #     mask_green = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_green >= 0) \
+        #         & (index_green < 3*self.height*self.width)
+        #     mask_blue = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_blue >= 0) \
+        #         & (index_blue < 3*self.height*self.width)
             
-            tencode.put_(index_red[mask_red], 255.0*pol[mask_red], accumulate=False)
-            tencode.put_(index_green[mask_green], 255.0*(1-t_norm[mask_green]), accumulate=False)
-            tencode.put_(index_blue[mask_blue], 255.0*(1-pol[mask_blue]), accumulate=False)
+        #     tencode.put_(index_red[mask_red], 255.0*pol[mask_red], accumulate=False)
+        #     tencode.put_(index_green[mask_green], 255.0*(1-t_norm[mask_green]), accumulate=False)
+        #     tencode.put_(index_blue[mask_blue], 255.0*(1-pol[mask_blue]), accumulate=False)
+        #     print(tencode.device)
+        #     print(x.sum(), y.sum(), pol.sum(), time.sum())
+        #     print(tencode.sum())
+
+        #     if self.normalize:
+        #         tencode = tencode / 255.0
+
+        H, W = self.height, self.width
+        device = x.device
+
+        # init output
+        if self.white_frame:
+            tencode = torch.full((3, H, W), 255.0, device=device)
+        else:
+            tencode = torch.zeros((3, H, W), device=device)
+
+        if x.numel() == 0:
+            return tencode / 255.0 if self.normalize else tencode
+
+        with torch.no_grad():
+            x = x.long()
+            y = y.long()
+            pol = pol.int()
+
+            # valid events
+            valid = (x >= 0) & (x < W) & (y >= 0) & (y < H)
+            x, y, pol, time = x[valid], y[valid], pol[valid], time[valid]
+
+            if x.numel() == 0:
+                return tencode / 255.0 if self.normalize else tencode
+
+            # normalize time
+            t_norm = (time - time[0]) / (time[-1] - time[0])
+
+            # pixel index
+            idx = y * W + x
+            HW = H * W
+
+            # store max time per pixel
+            max_time = torch.full((HW,), -1.0, device=device)
+            max_time.scatter_reduce_(0, idx, time, reduce="amax")
+
+            # keep only "last" events
+            keep = time == max_time[idx]
+
+            idx = idx[keep]
+            pol = pol[keep]
+            t_norm = t_norm[keep]
+
+            flat = tencode.view(3, -1)
+
+            flat[0, idx] = 255.0 * pol.float()
+            flat[1, idx] = 255.0 * (1.0 - t_norm)
+            flat[2, idx] = 255.0 * (1.0 - pol.float())
 
             if self.normalize:
-                tencode = tencode / 255.0
+                tencode /= 255.0
+            
+            # print(tencode.device)
+            # print(x.sum(), y.sum(), pol.sum(), time.sum())
+            # print(tencode.sum())
 
         return tencode
 
@@ -322,6 +419,139 @@ class Tencode(EventRepresentation):
 
         return tencode
 
+
+class TencodePixelCount(EventRepresentation):
+
+    def __init__(self, height: int, width: int, normalize: bool, white_frame: bool = False):
+        super().__init__(height, width)
+        self.height = height
+        self.width = width
+        self.normalize = normalize
+        self.white_frame = white_frame
+
+    @classmethod
+    def from_configuration(cls, configuration):
+        assert configuration["representation_type"] == "tencode_pixelcount"
+        _white_frame = bool(configuration.get("white_frame", False))
+        return cls(height=int(configuration["height"]),
+                   width=int(configuration["width"]),
+                   normalize=bool(configuration["normalize"]),
+                   white_frame=_white_frame)
+
+    def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
+        assert x.shape == y.shape == pol.shape == time.shape
+        assert x.ndim == 1
+
+        H, W = self.height, self.width
+        device = x.device
+
+        base_value = 255.0 if self.white_frame else 0.0
+        representation = torch.full((3, H, W), base_value, device=device)
+
+        if x.numel() == 0:
+            return representation / 255.0 if self.normalize else representation
+
+        with torch.no_grad():
+            x = x.long()
+            y = y.long()
+            pol = pol.int()
+
+            valid = (x >= 0) & (x < W) & (y >= 0) & (y < H)
+            x, y, pol, time = x[valid], y[valid], pol[valid], time[valid]
+
+            if x.numel() == 0:
+                return representation / 255.0 if self.normalize else representation
+
+            denom = torch.clamp(time[-1] - time[0], min=1e-12)
+            t_norm = (time - time[0]) / denom
+
+            idx = y * W + x
+            HW = H * W
+
+            counts = torch.zeros((HW,), device=device)
+            counts.scatter_add_(0, idx, torch.ones_like(time, dtype=torch.float, device=device))
+
+            max_time = torch.full((HW,), -1.0, device=device)
+            max_time.scatter_reduce_(0, idx, time, reduce="amax")
+
+            keep = time == max_time[idx]
+            idx_last = idx[keep]
+            pol_last = pol[keep]
+            t_norm_last = t_norm[keep]
+
+            flat = representation.view(3, -1)
+            red_values = torch.where(pol_last == 1,
+                                     torch.tensor(125.0, device=device),
+                                     torch.tensor(255.0, device=device))
+            flat[2, idx_last] = red_values
+            flat[1, idx_last] = 255.0 * (1.0 - t_norm_last)
+
+            count_mask = counts > 0
+            if count_mask.any():
+                nz_counts = counts[count_mask]
+                cmin = nz_counts.min()
+                cmax = nz_counts.max()
+                if cmax > cmin:
+                    scaled = 255.0 * (nz_counts - cmin) / (cmax - cmin)
+                else:
+                    scaled = torch.full_like(nz_counts, 255.0)
+                flat[0, count_mask] = scaled
+            # flat[0, :] = 0
+            # flat[1, :] = 0
+            if self.normalize:
+                representation = representation / 255.0
+
+        return representation
+
+    def get_dataset_file_name(self, extra_str=""):
+        return f"tencode_pixelcount_{extra_str}"
+
+    def to_rgb_stereo(self, representation_left, representation_right):
+        return tencode_stereo_to_rgb(representation_left, representation_right)
+
+    def to_rgb_mono(self, representation):
+        return tencode_mono_to_rgb(representation)
+
+    def info(self):
+        output = {"representation_type": "tencode_pixelcount",
+              "height": self.height,
+              "width": self.width,
+              "white_frame": self.white_frame,
+             }
+        return output
+    
+    def convert_from_voxels(self, voxels):
+        n,h,w = voxels.shape
+        g_map = [255.0 * (1-i) for i in torch.linspace(0,1,n)]
+        base_value = 255.0 if self.white_frame else 0.0
+        representation = torch.full((3,h,w), base_value, dtype=torch.float)
+        count_map = torch.zeros((h,w), dtype=torch.float)
+        for i in range(n):
+            layer = voxels[i]
+            pos_mask = layer > 0
+            neg_mask = layer < 0
+            count_map += layer.abs()
+            if pos_mask.any() or neg_mask.any():
+                representation[1, pos_mask | neg_mask] = g_map[i]
+                representation[0, pos_mask] = 125.0
+                representation[0, neg_mask] = 255.0
+
+        nz_mask = count_map > 0
+        if nz_mask.any():
+            nz_counts = count_map[nz_mask]
+            cmin = nz_counts.min()
+            cmax = nz_counts.max()
+            if cmax > cmin:
+                scaled = 255.0 * (nz_counts - cmin) / (cmax - cmin)
+            else:
+                scaled = torch.full_like(nz_counts, 255.0)
+            representation[2, nz_mask] = scaled
+
+        if self.normalize:
+            representation = representation / 255.0
+
+        return representation
+
 def representation_from_config_file(info_json_path: str):
     # Let's read the dataset info.json file
     with open(info_json_path, "r") as info_json:
@@ -332,6 +562,8 @@ def representation_from_config_file(info_json_path: str):
         return Histogram.from_configuration(representation_info)
     elif representation_info["representation_type"] == "tencode":
         return Tencode.from_configuration(representation_info)
+    elif representation_info["representation_type"] == "tencode_pixelcount":
+        return TencodePixelCount.from_configuration(representation_info)
     else:
         raise ValueError(f"Unknown representation type {representation_info['representation_type']}")
 
@@ -339,4 +571,5 @@ KNOWN_REPRESENTATIONS = {
     "voxel_grid": VoxelGrid,
     "histogram": Histogram,
     "tencode": Tencode,
+    "tencode_pixelcount": TencodePixelCount,
 }
