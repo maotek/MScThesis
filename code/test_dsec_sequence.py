@@ -187,8 +187,27 @@ def main():
     events_path = os.path.join(out_dir, f"events_{args.index:05d}.png")
     depth_path = os.path.join(out_dir, f"depth_{args.index:05d}.png")
 
+    # Overlay events on depth visualization
+    if depth_vis.shape[:2] != events_rgb.shape[:2]:
+        events_for_overlay = cv2.resize(events_rgb, (depth_vis.shape[1], depth_vis.shape[0]), interpolation=cv2.INTER_NEAREST)
+    else:
+        events_for_overlay = events_rgb
+
+    if depth_vis.ndim == 2:
+        depth_for_overlay = np.repeat(depth_vis[..., None], 3, axis=2)
+    elif depth_vis.ndim == 3 and depth_vis.shape[2] == 1:
+        depth_for_overlay = np.repeat(depth_vis, 3, axis=2)
+    else:
+        depth_for_overlay = depth_vis
+
+    depth_overlay = 0.2 * events_for_overlay.astype(np.float32) + 0.8 * depth_for_overlay.astype(np.float32)
+    depth_overlay = np.clip(depth_overlay / 255.0, 0.0, 1.0)
+    depth_overlay_path = os.path.join(out_dir, f"overlay_events_depth_{args.index:05d}.png")
+    save_image(depth_overlay_path, depth_overlay)
+
     save_image(events_path, events_rgb)
     save_image(depth_path, depth_vis)
+    print(f"Saved overlay (events on depth) to {depth_overlay_path}")
 
     if args.load_images == "yes" and "rgb" in sample:
         rgb = sample["rgb"][0].cpu().numpy()

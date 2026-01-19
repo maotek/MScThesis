@@ -342,30 +342,30 @@ def main() -> None:
 
     if args.model == "dav2":
         model = Dav2Wrapper(
-            encoder="vitb",
-            checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
+            encoder="vits",
+            checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
             device=device,
             input_size=518,
         )
     elif args.model == "dav2_infer":
         model = Dav2InferWrapper(
-            encoder="vitb",
-            checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
+            encoder="vits",
+            checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
             device=device,
             input_size=518,
         )
     elif args.model == "e2vid_dav2":
         model = E2VIDDav2(
             e2vid_weights=None,
-            dav2_encoder="vitb",
-            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
+            dav2_encoder="vits",
+            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
             device=device,
         )
     elif args.model == "e2vid_dav2_composite":
         model = E2VIDDav2Composite(
             e2vid_weights=None,
-            dav2_encoder="vitb",
-            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
+            dav2_encoder="vits",
+            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
             device=device,
         )
     else:

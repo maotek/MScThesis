@@ -51,7 +51,7 @@ class Dav2Wrapper(torch.nn.Module):
         )
         if not os.path.isfile(ckpt):
             raise FileNotFoundError(f"Checkpoint not found: {ckpt}")
-
+        print("Loading DAV2 checkpoint from:", ckpt)
         cfg = MODEL_CONFIGS[encoder]
         self.model = DepthAnythingV2(encoder=encoder, **cfg)
         self.model.load_state_dict(torch.load(ckpt, map_location="cpu"))
