@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -10,6 +11,8 @@ from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events.events_representations import VoxelGrid
 from networks.e2vid_dav2 import E2VIDDav2
+from evaluation import prepare_target_data_torch, prepare_target_data
+from losses import normalized_depth_scale_and_shift
 from util import save_depth_colormap, save_grayscale, save_voxelgrid
 
 
@@ -21,7 +24,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/train/zurich_city_01_e",
+        default="datasets/DSEC/data/validate/interlaken_00_c",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
@@ -75,20 +78,33 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def depth_to_colormap(depth: np.ndarray) -> np.ndarray:
+    depth_min, depth_max = depth.min(), depth.max()
+    depth_norm = (depth - depth_min) / (depth_max - depth_min + 1e-8)
+    cmap = plt.get_cmap("viridis")
+    depth_rgb = (255 * cmap(depth_norm)[..., :3]).astype(np.uint8)
+    return depth_rgb
+
+
 def ensure_dir(path: str) -> str:
     Path(path).mkdir(parents=True, exist_ok=True)
     return path
 
-def visualize(
-    events_voxel: torch.Tensor,
-    recon: torch.Tensor,
-    depth: torch.Tensor,
-    out_dir: str,
-    idx: int,
-) -> None:
+def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target_np: np.ndarray, out_dir: str, idx: int) -> None:
+    events_voxel = sample["depth_aligned_events"][0]
+
+    pred_raw_rgb = depth_to_colormap(pred_np_raw)
+    pred_rgb = depth_to_colormap(pred_np)
+    gt_rgb = depth_to_colormap(target_np)
+
+    # Overlay: blend scaled prediction and ground truth
+    overlay_rgb = 0.5 * pred_rgb + 0.5 * gt_rgb
+
     save_voxelgrid(os.path.join(out_dir, f"{idx:05d}_events.png"), events_voxel)
-    save_grayscale(os.path.join(out_dir, f"{idx:05d}_recon.png"), recon)
-    save_depth_colormap(os.path.join(out_dir, f"{idx:05d}_depth.png"), depth)
+    plt.imsave(os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"), pred_raw_rgb)
+    plt.imsave(os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"), pred_rgb)
+    plt.imsave(os.path.join(out_dir, f"{idx:05d}_gt_depth.png"), gt_rgb)
+    plt.imsave(os.path.join(out_dir, f"{idx:05d}_overlay.png"), overlay_rgb.astype(np.uint8))
 
 
 @torch.no_grad()
@@ -106,11 +122,11 @@ def main() -> None:
         event_representation=rep,
         time_window_ms=args.time_window_ms,
         augmentator=None,
-        load_images=False,
+        load_images=True,
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="validation",
+        split="train",
         self_supervised=False,
         postfix="",
     )
@@ -131,8 +147,19 @@ def main() -> None:
     intensity = model.e2vid(events)  # (B,1,H,W)
     depth = model.dav2(intensity.repeat(1, 3, 1, 1))  # (B,1,H,W)
 
+    # Apply scale-shift normalization to match ground truth
+    target_depth_t = sample["depth"][0].to(device)
+    target_proc_t = prepare_target_data_torch(target_depth_t, 80.0)
+    scale, shift = normalized_depth_scale_and_shift(
+        depth.squeeze(1), target_proc_t, target_proc_t > 0
+    )
+    pred_depth_scaled = scale[:, None, None] * depth.squeeze(1) + shift[:, None, None]
+    pred_np = np.clip(pred_depth_scaled.detach().cpu().squeeze().numpy(), 0, 80.0)
+    pred_np_raw = np.clip(depth.squeeze().detach().cpu().numpy(), 0, 80.0)
+    target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), 80.0)
+
     out_dir = ensure_dir(args.output_dir)
-    visualize(sample["depth_aligned_events"][0], intensity[0], depth[0], out_dir, args.index)
+    visualize(sample, pred_np, pred_np_raw, target_np, out_dir, args.index)
     print(f"Saved outputs to {out_dir}")
 
 

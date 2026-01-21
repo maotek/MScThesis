@@ -16,15 +16,25 @@ class E2VIDDav2(torch.nn.Module):
     def __init__(
         self,
         e2vid_weights: Optional[str] = None,
-        dav2_encoder: str = "vitb",
+        dav2_encoder: str = "vits",
         dav2_checkpoint: Optional[str] = None,
         device: Optional[torch.device] = None,
     ) -> None:
         super().__init__()
-        self.device = device or (torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"))
+        self.device = self._select_device(device)
         self.e2vid = E2VIDWrapper(weights_path=e2vid_weights, device=self.device)
         self.dav2 = Dav2Wrapper(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
         self.to(self.device)
+
+    @staticmethod
+    def _select_device(device: Optional[torch.device]) -> torch.device:
+        if device is not None:
+            return device
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
 
     def reset_state(self) -> None:
         self.e2vid.reset_state()

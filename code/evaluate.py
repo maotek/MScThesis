@@ -10,7 +10,7 @@ import tqdm
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events import Tencode, TencodePixelCount, VoxelGrid
-from networks.dav2_wrapper import Dav2Wrapper, Dav2InferWrapper
+from networks.dav2_wrapper import Dav2Wrapper
 from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from evaluation import (
@@ -29,24 +29,12 @@ from util import (
 )
 
 
-def sanitize_prediction(prediction: np.ndarray, clip_distance: float) -> np.ndarray:
-    """DAV2 outputs metric depth; just clamp and clean NaNs/Infs."""
-    prediction = np.nan_to_num(prediction, nan=0.0, posinf=clip_distance, neginf=0.0)
-    return np.clip(prediction, 0, clip_distance)
-
-
-def sanitize_target(target: np.ndarray, clip_distance: float) -> np.ndarray:
-    """Keep GT in meters; clip and clean."""
-    target = np.nan_to_num(target, nan=0.0, posinf=clip_distance, neginf=0.0)
-    return np.clip(target, 0, clip_distance)
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate DAV2 on DSEC validation sequences.")
     parser.add_argument(
         "--dsec-root",
         type=str,
-        default="datasets/DSEC/data/train",
+        default="datasets/DSEC/data/validate",
         help="Root folder containing DSEC validation sequences",
     )
     parser.add_argument(
@@ -65,16 +53,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--representation",
         type=str,
-        choices=("tencode", "tencode_pixelcount", "voxelgrid"),
+        choices=("tencode", "tencode_pixelcount", "voxelgrid", "rgb"),
         default="tencode",
-        help="Event representation to use (tencode, tencode_pixelcount, voxelgrid).",
+        help="Event representation to use (tencode, tencode_pixelcount, voxelgrid, rgb).",
     )
     parser.add_argument(
         "--model",
         type=str,
-        choices=("dav2", "dav2_infer", "e2vid_dav2", "e2vid_dav2_composite"),
+        choices=("dav2", "e2vid_dav2", "e2vid_dav2_composite", "dae", "dav2_rgb"),
         default="dav2",
-        help="Model type: dav2, dav2_infer, e2vid_dav2 (E2VID->DAV2 depth), or e2vid_dav2_composite (E2VID composite RGB -> DAV2 depth).",
+        help="Model type: dav2, e2vid_dav2 (E2VID->DAV2 depth), e2vid_dav2_composite (E2VID composite RGB -> DAV2 depth), or dae (DepthAnyEvent).",
     )
     parser.add_argument(
         "--clip-distance",
@@ -127,7 +115,7 @@ def select_device(device_str: Optional[str]) -> torch.device:
 
 def make_representation(representation: str):
     representation = representation.lower()
-    if representation == "tencode":
+    if representation == "tencode" or representation == "rgb":
         return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
     if representation == "tencode_pixelcount":
         return TencodePixelCount(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
@@ -145,7 +133,7 @@ def make_dataset(sequence_path: str, time_window_ms: int, representation: str) -
         event_representation=rep,
         time_window_ms=time_window_ms,
         augmentator=None,
-        load_images=False,
+        load_images=False if representation != "rgb" else True,
         overfit=False,
         sequence_window=1,
         sequence_step=1,
@@ -184,16 +172,6 @@ def write_csv(path: str, seq_results: list, mean_metrics: Dict[str, float]) -> N
             mean_val = mean_metrics.get(k)
             row.append("" if mean_val is None else f"{mean_val:.6f}")
             f.write(",".join(row) + "\n")
-
-
-def events_to_image(events: np.ndarray) -> np.ndarray:
-    """Convert event tensor (C,H,W) to uint8 image for quick visualization."""
-    if events.ndim != 3:
-        raise ValueError("events_to_image expects (C,H,W)")
-    c, h, w = events.shape
-    if c == 3:
-        return tencode_to_uint8(events)
-    return voxelgrid_to_uint8(events)
 
 
 def save_visualization(
@@ -241,6 +219,12 @@ def evaluate_sequence(
 
         target_depth_t = sample["depth"][0].to(device)  # (1,H,W)
         events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
+
+        # Use RGB input for dav2_rgb model
+        if dataset.load_images and representation == "rgb":
+            events = sample["rgb"][0].unsqueeze(0).to(device)
+            # resize to 480x640
+            events = torch.nn.functional.interpolate(events, size=(480, 640), mode='bilinear', align_corners=False)
         
         pred_depth = model(events)  # (1,1,H,W) or (depth, composite)
         if isinstance(pred_depth, tuple):
@@ -323,9 +307,10 @@ def main() -> None:
     # Enforce allowed representations per model to avoid downstream shape/compatibility errors
     allowed_reps = {
         "dav2": ("tencode", "tencode_pixelcount"),
-        "dav2_infer": ("tencode", "tencode_pixelcount"),
         "e2vid_dav2": ("voxelgrid",),
         "e2vid_dav2_composite": ("voxelgrid",),
+        "dae": ("tencode", "tencode_pixelcount"),
+        "dav2_rgb": ("rgb",),
     }
 
     # Check representation compatibility
@@ -340,15 +325,8 @@ def main() -> None:
     if args.csv_path and args.erase_csv and os.path.exists(args.csv_path):
         os.remove(args.csv_path)
 
-    if args.model == "dav2":
+    if args.model == "dav2" or args.model == "dav2_rgb":
         model = Dav2Wrapper(
-            encoder="vits",
-            checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
-            device=device,
-            input_size=518,
-        )
-    elif args.model == "dav2_infer":
-        model = Dav2InferWrapper(
             encoder="vits",
             checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
             device=device,
@@ -368,7 +346,15 @@ def main() -> None:
             dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
             device=device,
         )
+    elif args.model == "dae":
+        from networks.dae_wrapper import DAEWrapper
+        model = DAEWrapper(
+            checkpoint=os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth"),
+            device=device,
+            input_size=518,
+        )
     else:
+        print(args.model)
         raise ValueError(f"Unsupported model: {args.model}")
 
     overall_sum: Dict[str, float] = {}

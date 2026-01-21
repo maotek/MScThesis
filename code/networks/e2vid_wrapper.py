@@ -11,6 +11,8 @@ def _default_device(device: Optional[torch.device]) -> torch.device:
         return device
     if torch.cuda.is_available():
         return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
     return torch.device("cpu")
 
 
@@ -52,7 +54,10 @@ class E2VIDWrapper(torch.nn.Module):
 
         # Determine if the loaded model is recurrent by inspecting attributes
         self.is_recurrent = hasattr(self.model, "unetrecurrent") or "Recurrent" in self.model.__class__.__name__
-        print(f"E2VIDWrapper: loaded model from {self.weights_path} (recurrent={self.is_recurrent})")
+
+        print(f"Loading e2vid checkpoint from {self.weights_path} (recurrent={self.is_recurrent})")
+        print("Device:", self.device)
+
         self._states = None
 
     def reset_state(self) -> None:

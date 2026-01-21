@@ -6,7 +6,7 @@ import torch
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events.events_representations import VoxelGrid
-from networks.e2vid_dav2_composite import E2VIDDav2Composite
+from networks.e2vid_dav2_composite import E2VIDDav2Composite, E2VIDDav2Composite2
 from util import save_depth_colormap, save_grayscale, save_voxelgrid
 
 
@@ -48,8 +48,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dav2-checkpoint",
         type=str,
-        default=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
-        help="DAV2 checkpoint path (default: models/dav2/checkpoints/depth_anything_v2_vitb.pth)",
+        default=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
+        help="DAV2 checkpoint path (default: models/dav2/checkpoints/depth_anything_v2_vits.pth)",
     )
     parser.add_argument(
         "--output-dir",
@@ -106,7 +106,7 @@ def main() -> None:
 
     model = E2VIDDav2Composite(
         e2vid_weights=args.e2vid_checkpoint,
-        dav2_encoder="vitb",
+        dav2_encoder="vits",
         dav2_checkpoint=args.dav2_checkpoint,
         device=device,
     )
@@ -116,20 +116,14 @@ def main() -> None:
     # Run E2VID/DAV2 pipeline
     depth, composite = model(events)  # composite: (B,3,H,W)
 
-    # Red channel already 0..1
-    recon = composite[:, 0:1].clamp(0.0, 1.0)
-
     out_dir = ensure_dir(args.output_dir)
     # Save inputs and outputs
     save_voxelgrid(os.path.join(out_dir, f"{args.index:05d}_events.png"), sample["depth_aligned_events"][0])
-    save_grayscale(os.path.join(out_dir, f"{args.index:05d}_recon.png"), recon[0])
     save_depth_colormap(os.path.join(out_dir, f"{args.index:05d}_depth.png"), depth[0])
 
     import matplotlib.pyplot as plt
 
     comp = composite[0].detach().cpu()
-    comp = comp - comp.min()
-    comp = comp / (comp.max() + 1e-8)
     comp_uint8 = (comp.clamp(0.0, 1.0) * 255.0).permute(1, 2, 0).numpy()
     plt.imsave(os.path.join(out_dir, f"{args.index:05d}_composite.png"), comp_uint8.astype("uint8"))
 
