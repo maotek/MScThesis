@@ -10,7 +10,7 @@ import torch
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events import Tencode, TencodePixelCount
-from networks.dav2_wrapper import Dav2Wrapper
+from networks.dav2_wrapper import Dav2
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
 
@@ -132,7 +132,7 @@ def main() -> None:
     assert 0 <= args.index < len(dataset), f"Index {args.index} out of range for sequence of length {len(dataset)}"
     sample = dataset[args.index]
 
-    model = Dav2Wrapper(encoder=args.encoder, checkpoint=args.checkpoint, device=device, input_size=args.input_size)
+    model = Dav2(encoder=args.encoder, checkpoint=args.checkpoint, device=device, input_size=args.input_size)
 
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
     depth_pred = model(events).squeeze(1)  # [B,H,W]

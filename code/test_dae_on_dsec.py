@@ -9,7 +9,7 @@ import torch
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events import Tencode
-from networks.dae_wrapper import DAEWrapper
+from networks.dae_wrapper import DAE
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
 
@@ -124,7 +124,7 @@ def main() -> None:
     assert 0 <= args.index < len(dataset), f"Index {args.index} out of range for sequence of length {len(dataset)}"
     sample = dataset[args.index]
 
-    model = DAEWrapper(
+    model = DAE(
         encoder=args.encoder,
         checkpoint=args.checkpoint,
         device=device,

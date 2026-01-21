@@ -16,7 +16,7 @@ def _default_device(device: Optional[torch.device]) -> torch.device:
     return torch.device("cpu")
 
 
-class E2VIDWrapper(torch.nn.Module):
+class E2VID(torch.nn.Module):
     """Thin wrapper around the pretrained RPG E2VID model.
 
     Expects voxel-grid event tensors shaped (B, C, H, W) where C matches the
@@ -91,5 +91,5 @@ class E2VIDWrapper(torch.nn.Module):
         return pred
 
 
-def load_e2vid(weights_path: Optional[str] = None, device: Optional[torch.device] = None) -> E2VIDWrapper:
-    return E2VIDWrapper(weights_path=weights_path, device=device)
+def load_e2vid(weights_path: Optional[str] = None, device: Optional[torch.device] = None) -> E2VID:
+    return E2VID(weights_path=weights_path, device=device)

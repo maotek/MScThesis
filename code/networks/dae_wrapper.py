@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from models.depthanyevent.models.dav2 import get_depth_anything_v2
 
 
-class DAEWrapper(torch.nn.Module):
+class DAE(torch.nn.Module):
     """Thin wrapper around Depth AnyEvent's DAv2 model for easy loading/inference.
 
     Args:
@@ -106,7 +106,7 @@ class DAEWrapper(torch.nn.Module):
         depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=False)
         return depth
 
-    def to_device(self, device: torch.device) -> "DAEWrapper":
+    def to_device(self, device: torch.device) -> "DAE":
         self.device = device
         self.model.to(device)
         return self

@@ -19,7 +19,7 @@ MODEL_CONFIGS = {
 }
 
 
-class Dav2Wrapper(torch.nn.Module):
+class Dav2(torch.nn.Module):
     """Thin wrapper around DepthAnythingV2 for easy loading/inference.
 
     Args:
@@ -92,7 +92,7 @@ class Dav2Wrapper(torch.nn.Module):
         depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=False)
         return depth
 
-    def to_device(self, device: torch.device) -> "Dav2Wrapper":
+    def to_device(self, device: torch.device) -> "Dav2":
         self.device = device
         self.model.to(device)
         return self

@@ -10,7 +10,7 @@ import tqdm
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events import Tencode, TencodePixelCount, VoxelGrid
-from networks.dav2_wrapper import Dav2Wrapper
+from networks.dav2_wrapper import Dav2
 from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from evaluation import (
@@ -326,7 +326,7 @@ def main() -> None:
         os.remove(args.csv_path)
 
     if args.model == "dav2" or args.model == "dav2_rgb":
-        model = Dav2Wrapper(
+        model = Dav2(
             encoder="vits",
             checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
             device=device,
@@ -347,8 +347,8 @@ def main() -> None:
             device=device,
         )
     elif args.model == "dae":
-        from networks.dae_wrapper import DAEWrapper
-        model = DAEWrapper(
+        from networks.dae_wrapper import DAE
+        model = DAE(
             checkpoint=os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth"),
             device=device,
             input_size=518,

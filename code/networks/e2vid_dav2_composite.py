@@ -2,8 +2,8 @@ from typing import Optional, Tuple
 
 import torch
 
-from networks.e2vid_wrapper import E2VIDWrapper
-from networks.dav2_wrapper import Dav2Wrapper
+from networks.e2vid_wrapper import E2VID
+from networks.dav2_wrapper import Dav2
 
 
 class E2VIDDav2Composite(torch.nn.Module):
@@ -23,8 +23,8 @@ class E2VIDDav2Composite(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.device = self._select_device(device)
-        self.e2vid = E2VIDWrapper(weights_path=e2vid_weights, device=self.device)
-        self.dav2 = Dav2Wrapper(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
+        self.e2vid = E2VID(weights_path=e2vid_weights, device=self.device)
+        self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
         self.to(self.device)
 
     @staticmethod
@@ -100,8 +100,8 @@ class E2VIDDav2Composite2(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.device = self._select_device(device)
-        self.e2vid = E2VIDWrapper(weights_path=e2vid_weights, device=self.device)
-        self.dav2 = Dav2Wrapper(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
+        self.e2vid = E2VID(weights_path=e2vid_weights, device=self.device)
+        self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
         self.to(self.device)
 
     @staticmethod
