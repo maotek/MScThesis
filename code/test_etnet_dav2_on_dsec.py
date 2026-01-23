@@ -24,13 +24,13 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/train/zurich_city_01_e",
+        default="datasets/DSEC/data/validate/zurich_city_01_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
         "--index",
         type=int,
-        default=990,
+        default=200,
         help="Index within the sequence to visualize (depth-aligned events).",
     )
     parser.add_argument(

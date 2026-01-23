@@ -86,6 +86,9 @@ class ETNet(torch.nn.Module):
             events = events.unsqueeze(0)
         assert events.dim() == 4, "events must be (B,C,H,W)"
 
+        # Reset recurrent state if applicable.
+        self.model.reset_states()
+
         events = events.to(self.device)
         output = self.model(events)
         image = output["image"] if isinstance(output, dict) else output

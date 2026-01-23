@@ -18,10 +18,10 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/train/zurich_city_01_e",
-        help="Path to a DSEC sequence root (default: datasets/DSEC/data/train/zurich_city_01_e)",
+        default="datasets/DSEC/data/validate/zurich_city_01_f",
+        help="Path to a DSEC sequence root (default: datasets/DSEC/data/validate/zurich_city_01_f)",
     )
-    parser.add_argument("--index", type=int, default=990, help="Index within the sequence to visualize (depth-aligned events).")
+    parser.add_argument("--index", type=int, default=600, help="Index within the sequence to visualize (depth-aligned events).")
     parser.add_argument("--time-window-ms", type=int, default=50, help="Event window size for building voxel-grid representations.")
     parser.add_argument(
         "--num-bins",
@@ -66,7 +66,7 @@ def main() -> None:
         else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     )
 
-    rep = VoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
+    rep = VoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=False)
     dataset = DsecSequence(
         sequence_path=args.sequence,
         event_representation=rep,
@@ -87,6 +87,8 @@ def main() -> None:
     model = load_etnet(checkpoint_path=args.checkpoint, device=device, use_minmax_norm=args.use_minmax_norm)
     # ET-Net expects (B,C,H,W)
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
+    print(events.shape)
+    print("min:", events.min().item(), "max:", events.max().item())
     recon = model(events)  # (B,1,H,W)
 
     out_dir = ensure_dir(args.output_dir)
