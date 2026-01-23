@@ -128,6 +128,8 @@ class DsecSequence(Dataset):
         self.self_supervised = self_supervised
         self.postfix = postfix
 
+        print("Self-supervised mode:", self.self_supervised)
+
         # Validate and set sequence parameters
         if sequence_window < 1:
             print(f"Warning: sequence_window={sequence_window} < 1. Setting to 1.")
@@ -574,8 +576,8 @@ class DsecSequence(Dataset):
             disparity = self.get_disparity_map(disparity_path)
             
             # Convert disparity to depth if needed (for supervised training)
-            # depth = self.disparity2depth(disparity) if not self.self_supervised else disparity
-            depth = self.disparity2depth(disparity)              
+            depth = self.disparity2depth(disparity) if not self.self_supervised else disparity
+            # depth = self.disparity2depth(disparity)            
             to_return["depth"] = depth
 
             # Setup event data sources based on available data

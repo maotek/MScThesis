@@ -13,6 +13,7 @@ from datasets.events import Tencode, TencodePixelCount, VoxelGrid
 from networks.dav2_wrapper import Dav2
 from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
+from networks.etnet_dav2 import ETNetDav2
 from evaluation import (
     add_to_metrics,
     prepare_target_data,
@@ -60,9 +61,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         type=str,
-        choices=("dav2", "e2vid_dav2", "e2vid_dav2_composite", "dae", "dav2_rgb"),
+        choices=("dav2", "e2vid_dav2", "e2vid_dav2_composite", "dae", "dav2_rgb", "etnet_dav2"),
         default="dav2",
-        help="Model type: dav2, e2vid_dav2 (E2VID->DAV2 depth), e2vid_dav2_composite (E2VID composite RGB -> DAV2 depth), or dae (DepthAnyEvent).",
+        help="Model type: dav2, e2vid_dav2 (E2VID->DAV2 depth), e2vid_dav2_composite (E2VID composite RGB -> DAV2 depth), dae (DepthAnyEvent), etnet_dav2 (ET-Net->DAV2 depth).",
     )
     parser.add_argument(
         "--clip-distance",
@@ -311,6 +312,7 @@ def main() -> None:
         "e2vid_dav2_composite": ("voxelgrid",),
         "dae": ("tencode", "tencode_pixelcount"),
         "dav2_rgb": ("rgb",),
+        "etnet_dav2": ("voxelgrid",),
     }
 
     # Check representation compatibility
@@ -352,6 +354,13 @@ def main() -> None:
             checkpoint=os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth"),
             device=device,
             input_size=518,
+        )
+    elif args.model == "etnet_dav2":
+        model = ETNetDav2(
+            etnet_checkpoint=os.path.join("models", "etnet", "checkpoints", "etnet.pth"),
+            dav2_encoder="vits",
+            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
+            device=device,
         )
     else:
         print(args.model)

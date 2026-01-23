@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--encoder",
         type=str,
-        default="vitb",
+        default="vits",
         choices=["vits", "vitb", "vitl"],
         help="Which DAV2 encoder to use.",
     )
@@ -137,8 +137,8 @@ def main() -> None:
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
     depth_pred = model(events).squeeze(1)  # [B,H,W]
 
-    # # Invert depth prediction if it's in inverse depth
-    # # normalize per-image (so inversion is well-behaved)
+    # Invert depth prediction if it's in inverse depth
+    # normalize per-image (so inversion is well-behaved)
     # pred_min = depth_pred.amin(dim=(1,2), keepdim=True)
     # pred_max = depth_pred.amax(dim=(1,2), keepdim=True)
     # depth_pred = (depth_pred - pred_min) / (pred_max - pred_min + 1e-6)
@@ -155,7 +155,6 @@ def main() -> None:
         depth_pred, target_proc_t, target_proc_t > 0
     )
 
-    print(scale.shape, shift.shape)
     print(scale, shift)
     
     pred_depth_scaled = scale[:, None, None] * depth_pred + shift[:, None, None]
