@@ -61,7 +61,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         type=str,
-        choices=("dav2", "e2vid_dav2", "e2vid_dav2_composite", "dae", "dav2_rgb", "etnet_dav2"),
+        choices=("dav2", "e2vid_dav2", "e2vid_dav2_composite", "dae", "etnet_dav2"),
         default="dav2",
         help="Model type: dav2, e2vid_dav2 (E2VID->DAV2 depth), e2vid_dav2_composite (E2VID composite RGB -> DAV2 depth), dae (DepthAnyEvent), etnet_dav2 (ET-Net->DAV2 depth).",
     )
@@ -255,7 +255,7 @@ def evaluate_sequence(
             mask,
             event_frame=None,
             prefix="_",
-            debug=False,
+            debug=True,
             output_folder=None,
         )
 
@@ -307,11 +307,10 @@ def main() -> None:
 
     # Enforce allowed representations per model to avoid downstream shape/compatibility errors
     allowed_reps = {
-        "dav2": ("tencode", "tencode_pixelcount"),
+        "dav2": ("tencode", "tencode_pixelcount", "rgb"),
         "e2vid_dav2": ("voxelgrid",),
         "e2vid_dav2_composite": ("voxelgrid",),
         "dae": ("tencode", "tencode_pixelcount"),
-        "dav2_rgb": ("rgb",),
         "etnet_dav2": ("voxelgrid",),
     }
 
@@ -327,7 +326,7 @@ def main() -> None:
     if args.csv_path and args.erase_csv and os.path.exists(args.csv_path):
         os.remove(args.csv_path)
 
-    if args.model == "dav2" or args.model == "dav2_rgb":
+    if args.model == "dav2":
         model = Dav2(
             encoder="vits",
             checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),

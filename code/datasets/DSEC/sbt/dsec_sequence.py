@@ -40,6 +40,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import yaml
+from warp_rgb import get_intrinsics_extrinsics, warp_rgb_to_event, visualize_depth
 
 from ...events import EventRepresentation
 from .eventslicer import EventSlicer
@@ -324,6 +325,8 @@ class DsecSequence(Dataset):
             
             # Load disparity-to-depth conversion matrices
             self._load_disparity_conversion(cam_to_cam["disparity_to_depth"])
+            # Cache rectified intrinsics/extrinsics for RGB->event warping.
+            self.event_K_rect, self.rgb_K_rect, self.T_10_rect = get_intrinsics_extrinsics(cam_to_cam)
 
     def _load_intrinsics(self, intrinsics: dict) -> None:
         """
@@ -541,7 +544,6 @@ class DsecSequence(Dataset):
         # Apply depth conversion only to valid disparity values
         valid_mask = disparity > 0
         depth[valid_mask] = (focal * baseline) / disparity[valid_mask]
-        
         return depth
 
     def __getitem__(self, index: int) -> dict:
@@ -576,8 +578,8 @@ class DsecSequence(Dataset):
             disparity = self.get_disparity_map(disparity_path)
             
             # Convert disparity to depth if needed (for supervised training)
-            depth = self.disparity2depth(disparity) if not self.self_supervised else disparity
-            # depth = self.disparity2depth(disparity)            
+            depth = self.disparity2depth(disparity) if self.self_supervised else disparity
+            # depth = self.disparity2depth(disparity)         
             to_return["depth"] = depth
 
             # Setup event data sources based on available data
@@ -621,6 +623,25 @@ class DsecSequence(Dataset):
                 # Validate image loading
                 if left_image is None:
                     raise ValueError(f"Failed to load image: {image_path}")
+
+                if True:
+                    # Use raw disparity (not masked depth) to build the warp depth.
+                    disp_np = disparity.detach().cpu().numpy()
+                    # visualize_depth(disp_np, title="Disparity Map for Warping")
+                    if disp_np.ndim == 3 and disp_np.shape[0] == 1:
+                        disp_np = disp_np[0]
+                    focal = abs(self.q_event[2, 3])
+                    baseline = abs(1.0 / self.q_event[3, 2])
+                    depth_np = (focal * baseline) / (disp_np + 1e-6)
+                    depth_np[disparity == 0] = 80.0  # Cap invalid depth to far value
+                    # visualize_depth(depth_np, title="Depth Map for Warping")
+                    left_image = warp_rgb_to_event(
+                        left_image,
+                        depth_np,
+                        self.event_K_rect,
+                        self.rgb_K_rect,
+                        self.T_10_rect,
+                    )
                 
                 # Convert BGR to RGB
                 left_image = cv2.cvtColor(left_image, cv2.COLOR_BGR2RGB)

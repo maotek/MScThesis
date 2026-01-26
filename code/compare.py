@@ -6,10 +6,7 @@ from typing import Dict, List, Optional
 
 
 def is_threshold_metric(name: str) -> bool:
-    for thr in ("10", "20", "30"):
-        if name.startswith(f"_{thr}") or f"_{thr}_" in name:
-            return True
-    return False
+    return name.startswith("_10") or name.startswith("_20") or name.startswith("_30")
 
 
 def read_metrics(path: str) -> Dict[str, str]:
@@ -39,27 +36,31 @@ def to_float(val: str) -> Optional[float]:
         return None
 
 
+def prefers_higher(metric_name: str) -> bool:
+    return "threshold_delta" in metric_name
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compare evaluation CSVs by listing non-threshold metrics per file."
+        description="Create a Markdown comparison table from evaluate_*.csv files."
     )
     parser.add_argument(
         "--output-dir",
         type=str,
         default="output",
-        help="Directory containing evaluation CSV files (default: output).",
+        help="Directory containing evaluate_*.csv files (default: output).",
     )
     parser.add_argument(
-        "--save-csv",
+        "--save-md",
         type=str,
-        default="compare.csv",
-        help="Optional path to save the combined comparison table as CSV.",
+        default=os.path.join("output", "output.md"),
+        help="Path to save the Markdown table (default: output/output.md).",
     )
     args = parser.parse_args()
 
-    csv_paths = sorted(glob(os.path.join(args.output_dir, "*.csv")))
+    csv_paths = sorted(glob(os.path.join(args.output_dir, "evaluate_*.csv")))
     if not csv_paths:
-        print(f"No CSV files found under {args.output_dir}")
+        print(f"No evaluate_*.csv files found under {args.output_dir}")
         return
 
     metrics_per_file: List[Dict[str, str]] = []
@@ -69,7 +70,8 @@ def main() -> None:
     for csv_path in csv_paths:
         metrics = read_metrics(csv_path)
         metrics_per_file.append(metrics)
-        basenames.append(os.path.basename(csv_path))
+        stem = os.path.splitext(os.path.basename(csv_path))[0]
+        basenames.append(stem.replace("evaluate_", "", 1))
         all_metric_names.update(metrics.keys())
 
     if not all_metric_names:
@@ -78,52 +80,44 @@ def main() -> None:
 
     metric_names = sorted(all_metric_names)
 
-    # Build display matrix with bracketed maxima per metric
+    # Build display matrix with underlined best values per metric
     display_rows: List[List[str]] = []
     for m in metric_names:
         raw_vals = [metrics.get(m, "") for metrics in metrics_per_file]
         nums = [to_float(v) for v in raw_vals]
-        max_val = None
+        best_val = None
         for n in nums:
-            if n is not None:
-                max_val = n if max_val is None else max(max_val, n)
+            if n is None:
+                continue
+            if best_val is None:
+                best_val = n
+            else:
+                if prefers_higher(m):
+                    best_val = max(best_val, n)
+                else:
+                    best_val = min(best_val, n)
         disp_vals: List[str] = []
         for v, n in zip(raw_vals, nums):
-            if max_val is not None and n is not None and n == max_val:
-                disp_vals.append(f"[{v}]")
+            if best_val is not None and n is not None and n == best_val:
+                disp_vals.append(f"<u>{v}</u>")
             else:
                 disp_vals.append(v)
         display_rows.append([m, *disp_vals])
 
-    col_widths = [max(len("METRIC"), max(len(row[0]) for row in display_rows))]
-    for idx, name in enumerate(basenames):
-        width = max(len(name), max(len(row[idx + 1]) for row in display_rows), 4)
-        col_widths.append(width)
-
-    # Header
-    header_cells = ["METRIC".ljust(col_widths[0])]
-    for name, width in zip(basenames, col_widths[1:]):
-        header_cells.append(name.ljust(width))
-    print("  ".join(header_cells))
-    print("  ".join("-" * w for w in col_widths))
-
-    table_rows: List[List[str]] = []
+    header = ["METRIC", *basenames]
+    md_lines = ["| " + " | ".join(header) + " |"]
+    md_lines.append("| " + " | ".join(["---"] * len(header)) + " |")
     for row in display_rows:
-        row_cells = [row[0].ljust(col_widths[0])]
-        row_csv = [row[0]]
-        for cell, width in zip(row[1:], col_widths[1:]):
-            row_cells.append(cell.ljust(width))
-            row_csv.append(cell)
-        print("  ".join(row_cells))
-        table_rows.append(row_csv)
+        md_lines.append("| " + " | ".join(row) + " |")
 
-    if args.save_csv:
-        os.makedirs(os.path.dirname(args.save_csv) or ".", exist_ok=True)
-        with open(args.save_csv, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["METRIC", *basenames])
-            writer.writerows(table_rows)
-        print(f"\nSaved combined table to {args.save_csv}")
+    md_text = "\n".join(md_lines)
+    print(md_text)
+
+    if args.save_md:
+        os.makedirs(os.path.dirname(args.save_md) or ".", exist_ok=True)
+        with open(args.save_md, "w") as f:
+            f.write(md_text + "\n")
+        print(f"\nSaved Markdown table to {args.save_md}")
 
 
 if __name__ == "__main__":

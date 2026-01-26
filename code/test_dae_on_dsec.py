@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
         help="Path to a DSEC sequence root (default: datasets/DSEC/data/validate/interlaken_00_c)",
     )
     parser.add_argument(
-        "--index", type=int, default=10, help="Index within the sequence to visualize (depth-aligned events)."
+        "--index", type=int, default=60, help="Index within the sequence to visualize (depth-aligned events)."
     )
     parser.add_argument(
         "--encoder",
