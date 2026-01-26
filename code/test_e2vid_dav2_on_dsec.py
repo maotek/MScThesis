@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -13,7 +12,7 @@ from datasets.events.events_representations import VoxelGrid
 from networks.e2vid_dav2 import E2VIDDav2
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
-from util import save_depth_colormap, save_grayscale, save_voxelgrid
+from util import depth_to_colormap, save_image, save_voxelgrid
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--index",
         type=int,
-        default=10,
+        default=0,
         help="Index within the sequence to visualize (depth-aligned events).",
     )
     parser.add_argument(
@@ -54,8 +53,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dav2-checkpoint",
         type=str,
-        default=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vitb.pth"),
-        help="DAV2 checkpoint path (default: models/dav2/checkpoints/depth_anything_v2_vitb.pth)",
+        default=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
+        help="DAV2 checkpoint path (default: models/dav2/checkpoints/depth_anything_v2_vits.pth)",
     )
     parser.add_argument(
         "--output-dir",
@@ -78,14 +77,6 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def depth_to_colormap(depth: np.ndarray) -> np.ndarray:
-    depth_min, depth_max = depth.min(), depth.max()
-    depth_norm = (depth - depth_min) / (depth_max - depth_min + 1e-8)
-    cmap = plt.get_cmap("viridis")
-    depth_rgb = (255 * cmap(depth_norm)[..., :3]).astype(np.uint8)
-    return depth_rgb
-
-
 def ensure_dir(path: str) -> str:
     Path(path).mkdir(parents=True, exist_ok=True)
     return path
@@ -101,10 +92,10 @@ def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target
     overlay_rgb = 0.5 * pred_rgb + 0.5 * gt_rgb
 
     save_voxelgrid(os.path.join(out_dir, f"{idx:05d}_events.png"), events_voxel)
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"), pred_raw_rgb)
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"), pred_rgb)
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_gt_depth.png"), gt_rgb)
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_overlay.png"), overlay_rgb.astype(np.uint8))
+    save_image(os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"), pred_raw_rgb)
+    save_image(os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"), pred_rgb)
+    save_image(os.path.join(out_dir, f"{idx:05d}_gt_depth.png"), gt_rgb)
+    save_image(os.path.join(out_dir, f"{idx:05d}_overlay.png"), overlay_rgb.astype(np.uint8))
 
 
 @torch.no_grad()

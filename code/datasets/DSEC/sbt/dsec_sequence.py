@@ -633,7 +633,6 @@ class DsecSequence(Dataset):
                     focal = abs(self.q_event[2, 3])
                     baseline = abs(1.0 / self.q_event[3, 2])
                     depth_np = (focal * baseline) / (disp_np + 1e-6)
-                    depth_np[disparity == 0] = 80.0  # Cap invalid depth to far value
                     # visualize_depth(depth_np, title="Depth Map for Warping")
                     left_image = warp_rgb_to_event(
                         left_image,

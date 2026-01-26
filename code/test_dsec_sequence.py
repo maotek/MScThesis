@@ -9,19 +9,9 @@ from pathlib import Path
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events.events_representations import Tencode, Histogram, VoxelGrid
+from datasets.events.events_representations import Tencode
 from datasets.utils.data_augmentation import CenterCrop
-
-
-def to_uint8_rgb(arr: np.ndarray) -> np.ndarray:
-	arr = np.clip(arr, 0.0, 1.0)
-	arr = (arr * 255.0).astype(np.uint8)
-	return arr
-
-
-def save_image(path: str, img: np.ndarray):
-	os.makedirs(os.path.dirname(path), exist_ok=True)
-	plt.imsave(path, img)
+from util import grayscale_to_uint8, rgb_to_uint8, save_image, save_rgb
 
 
 def main():
@@ -29,10 +19,10 @@ def main():
     parser.add_argument(
         "sequence_path",
         nargs="?",
-        default="datasets/DSEC/data/train/interlaken_00_c",
-        help="Path to a DSEC sequence folder (default: datasets/DSEC/data/train/interlaken_00_c)",
+        default="datasets/DSEC/data/validate/interlaken_00_c",
+        help="Path to a DSEC sequence folder (default: datasets/DSEC/data/validate/interlaken_00_c)",
     )
-    parser.add_argument("--index", type=int, default=100, help="Sample index in the sequence")
+    parser.add_argument("--index", type=int, default=0, help="Sample index in the sequence")
     parser.add_argument("--time-window-ms", type=int, default=50, help="Event window in milliseconds")
     parser.add_argument("--output-dir", default="output/test_dsec_sequence", help="Where to save PNGs")
     parser.add_argument(
@@ -96,40 +86,16 @@ def main():
     y_rect = xy_rect[:, 1]
     tencode_rect = dataset.events_to_representation(x_rect, y_rect, pr, tr)
 
-    def _rep_to_uint8(img):
-        # handle torch tensor, numpy array or other sequence
-        if hasattr(img, "cpu"):
-            arr = img.cpu().numpy()
-        elif isinstance(img, np.ndarray):
-            arr = img
-        else:
-            arr = np.asarray(img)
-        if arr.max() > 1.0:
-            arr = arr / 255.0
-        return to_uint8_rgb(arr)
-
     os.makedirs(args.output_dir, exist_ok=True)
     # save raw and rectified tencode previews
-    events_raw_rgb = rep.to_rgb_mono(tencode_raw)
-    events_rect_rgb = rep.to_rgb_mono(tencode_rect)
-    events_raw_rgb = _rep_to_uint8(events_raw_rgb)
-    events_rect_rgb = _rep_to_uint8(events_rect_rgb)
+    events_raw_rgb = rgb_to_uint8(tencode_raw)
+    events_rect_rgb = rgb_to_uint8(tencode_rect)
     save_image(os.path.join(args.output_dir, f"events_tencode_raw_{args.index:05d}.png"), events_raw_rgb)
     save_image(os.path.join(args.output_dir, f"events_tencode_rect_{args.index:05d}.png"), events_rect_rgb)
     
 
     # Convert events (Tencode) to RGB for viewing
-    events_rgb = rep.to_rgb_mono(events)
-    # handle torch tensor, numpy array or other sequence
-    if hasattr(events_rgb, "cpu"):
-        events_rgb = events_rgb.cpu().numpy()
-    elif isinstance(events_rgb, np.ndarray):
-        events_rgb = events_rgb
-    else:
-        events_rgb = np.asarray(events_rgb)
-    if events_rgb.max() > 1.0:
-        events_rgb = events_rgb / 255.0
-    events_rgb = to_uint8_rgb(events_rgb)
+    events_rgb = rgb_to_uint8(events)
 
     # Depth visualization (simple min-max normalize)
     depth_np = depth.cpu().numpy()
@@ -140,7 +106,7 @@ def main():
         depth_vis = (depth_vis - depth_vis.min()) / (depth_vis.max() - depth_vis.min())
     else:
         depth_vis = np.zeros_like(depth_vis)
-    depth_vis = to_uint8_rgb(depth_vis)
+    depth_vis = grayscale_to_uint8(depth_vis)
 
     out_dir = args.output_dir
     os.makedirs(out_dir, exist_ok=True)
@@ -150,8 +116,7 @@ def main():
     if "rgb" in sample:
         rgb = sample["rgb"][0].cpu().numpy()
         rgb = np.clip(rgb, 0.0, 1.0)
-        rgb_vis = to_uint8_rgb(rgb.transpose(1, 2, 0))
-        # print(f"RGB frame shape: {rgb_vis.shape}")
+        rgb_vis = rgb_to_uint8(rgb)
 
     # Save combined view (events | depth | rgb) when available
     combined_path = os.path.join(out_dir, f"combined_{args.index:05d}.png")
@@ -161,7 +126,7 @@ def main():
         axes[0].set_title("Events (Tencode)")
         axes[0].axis("off")
         axes[1].imshow(depth_vis, cmap="gray")
-        axes[1].set_title("Depth (min-max)")
+        axes[1].set_title("Depth")
         axes[1].axis("off")
         axes[2].imshow(rgb_vis)
         axes[2].set_title("RGB (nearest)")
@@ -210,9 +175,7 @@ def main():
     print(f"Saved overlay (events on depth) to {depth_overlay_path}")
 
     if args.load_images == "yes" and "rgb" in sample:
-        rgb = sample["rgb"][0].cpu().numpy()
-        rgb = np.clip(rgb, 0.0, 1.0)
-        save_image(os.path.join(out_dir, f"rgb_{args.index:05d}.png"), rgb.transpose(1, 2, 0))
+        save_rgb(os.path.join(out_dir, f"rgb_{args.index:05d}.png"), sample["rgb"][0])
 
     print(f"Saved events to {events_path}")
     print(f"Saved depth to {depth_path}")
@@ -220,4 +183,3 @@ def main():
 
 if __name__ == "__main__":
 	main()
-

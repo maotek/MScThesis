@@ -18,10 +18,10 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/zurich_city_01_f",
-        help="Path to a DSEC sequence root (default: datasets/DSEC/data/validate/zurich_city_01_f)",
+        default="datasets/DSEC/data/validate/interlaken_00_c",
+        help="Path to a DSEC sequence root",
     )
-    parser.add_argument("--index", type=int, default=600, help="Index within the sequence to visualize (depth-aligned events).")
+    parser.add_argument("--index", type=int, default=0, help="Index within the sequence to visualize (depth-aligned events).")
     parser.add_argument("--time-window-ms", type=int, default=50, help="Event window size for building voxel-grid representations.")
     parser.add_argument(
         "--num-bins",

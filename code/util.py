@@ -12,10 +12,10 @@ def _to_numpy(arr):
     return np.asarray(arr)
 
 
-def tencode_to_uint8(tencode: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
-    arr = _to_numpy(tencode)
+def rgb_to_uint8(rgb: Union[torch.Tensor, np.ndarray]) -> np.ndarray:
+    arr = _to_numpy(rgb)
     if arr.ndim != 3 or arr.shape[0] != 3:
-        raise ValueError("tencode_to_uint8 expects shape (3,H,W)")
+        raise ValueError("rgb_to_uint8 expects shape (3,H,W)")
     arr = np.transpose(arr, (1, 2, 0))
     arr = np.clip(arr, 0.0, 1.0)
     return (255 * arr).astype(np.uint8)
@@ -59,8 +59,8 @@ def save_image(path: str, img: np.ndarray, cmap: Union[str, None] = None) -> Non
     plt.imsave(path, arr, cmap=cmap)
 
 
-def save_tencode(path: str, tencode: Union[torch.Tensor, np.ndarray]) -> None:
-    img = tencode_to_uint8(tencode)
+def save_rgb(path: str, rgb: Union[torch.Tensor, np.ndarray]) -> None:
+    img = rgb_to_uint8(rgb)
     save_image(path, img)
 
 
@@ -77,3 +77,19 @@ def save_grayscale(path: str, img: Union[torch.Tensor, np.ndarray]) -> None:
 def save_depth_colormap(path: str, depth: Union[torch.Tensor, np.ndarray]) -> None:
     colored = depth_to_colormap(depth)
     save_image(path, colored)
+
+
+def save_depth_colormap_with_cbar(
+    path: str,
+    depth: Union[torch.Tensor, np.ndarray],
+    label: str = "Depth (m)",
+) -> None:
+    arr = _to_numpy(depth).squeeze()
+    depth_min, depth_max = arr.min(), arr.max()
+    fig, ax = plt.subplots()
+    im = ax.imshow(arr, cmap="viridis", vmin=depth_min, vmax=depth_max)
+    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+    cbar.set_label(label)
+    ax.axis("off")
+    plt.savefig(path, bbox_inches="tight", pad_inches=0)
+    plt.close(fig)

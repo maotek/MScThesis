@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn.functional as F
@@ -104,6 +104,48 @@ class DAE(torch.nn.Module):
         elif depth.shape[1] != 1:
             depth = depth[:, :1]
         depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=False)
+        return depth
+    
+        # return self.infer_image(
+        #     x,
+        #     input_size_width=self.input_size,
+        #     input_size_height=self.input_size,
+        # )
+
+    @torch.no_grad()
+    def infer_image(
+        self,
+        x: torch.Tensor,
+        input_size_width: Optional[int] = None,
+        input_size_height: Optional[int] = None,
+        extract_features: bool = False,
+    ):
+        """Run Depth AnyEvent pre-processing + inference.
+
+        Args:
+            x: (B,3,H,W) tensor in [0,1].
+            input_size_width/height: optional size override for internal resize.
+            extract_features: if True, return (depth, features).
+        """
+        assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
+        output = self.model.infer_image(
+            x,
+            input_size_width=input_size_width,
+            input_size_height=input_size_height,
+            extract_features=extract_features,
+        )
+        if extract_features:
+            depth, features = output
+            if depth.dim() == 3:
+                depth = depth.unsqueeze(1)
+            elif depth.shape[1] != 1:
+                depth = depth[:, :1]
+            return depth, features
+        depth = output
+        if depth.dim() == 3:
+            depth = depth.unsqueeze(1)
+        elif depth.shape[1] != 1:
+            depth = depth[:, :1]
         return depth
 
     def to_device(self, device: torch.device) -> "DAE":

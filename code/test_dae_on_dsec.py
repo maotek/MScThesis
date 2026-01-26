@@ -2,7 +2,6 @@ import argparse
 import os
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -12,6 +11,7 @@ from datasets.events import Tencode
 from networks.dae_wrapper import DAE
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
+from util import depth_to_colormap, save_image, save_rgb
 
 
 def parse_args() -> argparse.Namespace:
@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
         help="Path to a DSEC sequence root (default: datasets/DSEC/data/validate/interlaken_00_c)",
     )
     parser.add_argument(
-        "--index", type=int, default=60, help="Index within the sequence to visualize (depth-aligned events)."
+        "--index", type=int, default=0, help="Index within the sequence to visualize (depth-aligned events)."
     )
     parser.add_argument(
         "--encoder",
@@ -67,25 +67,9 @@ def ensure_dir(path: str) -> str:
     return path
 
 
-def to_rgb_events(event_tensor: torch.Tensor) -> np.ndarray:
-    """Convert tencode events (3,H,W) to RGB uint8 image."""
-    event_np = event_tensor.detach().cpu().numpy()
-    event_np = np.transpose(event_np, (1, 2, 0))  # HWC
-    event_np = (255 * np.clip(event_np, 0.0, 1.0)).astype(np.uint8)
-    return event_np
-
-
-def depth_to_colormap(depth: np.ndarray) -> np.ndarray:
-    depth_min, depth_max = depth.min(), depth.max()
-    depth_norm = (depth - depth_min) / (depth_max - depth_min + 1e-8)
-    cmap = plt.get_cmap("viridis")
-    depth_rgb = (255 * cmap(depth_norm)[..., :3]).astype(np.uint8)
-    return depth_rgb
-
-
 def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target_np: np.ndarray, out_dir: str, idx: int) -> None:
     events = sample["depth_aligned_events"][0]
-    events_rgb = to_rgb_events(events)
+    events_rgb = events
 
     pred_rgb = depth_to_colormap(pred_np)
     pred_raw_rgb = depth_to_colormap(pred_np_raw)
@@ -94,11 +78,11 @@ def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target
     # Overlay: blend scaled prediction and ground truth
     overlay_rgb = 0.5 * pred_rgb + 0.5 * gt_rgb
 
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_events.png"), events_rgb)
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"), pred_raw_rgb)
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"), pred_rgb)
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_gt_depth.png"), gt_rgb)
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_overlay.png"), overlay_rgb.astype(np.uint8))
+    save_rgb(os.path.join(out_dir, f"{idx:05d}_events.png"), events_rgb)
+    save_image(os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"), pred_raw_rgb)
+    save_image(os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"), pred_rgb)
+    save_image(os.path.join(out_dir, f"{idx:05d}_gt_depth.png"), gt_rgb)
+    save_image(os.path.join(out_dir, f"{idx:05d}_overlay.png"), overlay_rgb.astype(np.uint8))
 
 
 @torch.no_grad()

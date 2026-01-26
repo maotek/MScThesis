@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
@@ -13,6 +12,7 @@ from datasets.events import Tencode, TencodePixelCount
 from networks.dav2_wrapper import Dav2
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
+from util import depth_to_colormap, save_depth_colormap_with_cbar, save_image, save_rgb
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,36 +56,9 @@ def ensure_dir(path: str) -> str:
     return path
 
 
-def to_rgb_events(event_tensor: torch.Tensor) -> np.ndarray:
-    """Convert tencode events (3,H,W) to RGB uint8 image."""
-    event_np = event_tensor.detach().cpu().numpy()
-    event_np = np.transpose(event_np, (1, 2, 0))  # HWC
-    event_np = (255 * np.clip(event_np, 0.0, 1.0)).astype(np.uint8)
-    return event_np
-
-
-def depth_to_colormap(depth: np.ndarray) -> np.ndarray:
-    depth_min, depth_max = depth.min(), depth.max()
-    depth_norm = (depth - depth_min) / (depth_max - depth_min + 1e-8)
-    cmap = plt.get_cmap("viridis")
-    depth_rgb = (255 * cmap(depth_norm)[..., :3]).astype(np.uint8)
-    return depth_rgb
-
-
-def depth_to_colormap_with_cbar(depth: np.ndarray, path: str) -> None:
-    depth_min, depth_max = depth.min(), depth.max()
-    fig, ax = plt.subplots()
-    im = ax.imshow(depth, cmap='viridis', vmin=depth_min, vmax=depth_max)
-    cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label('Depth (m)')
-    ax.axis('off')
-    plt.savefig(path, bbox_inches='tight', pad_inches=0)
-    plt.close(fig)
-
-
 def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target_np: np.ndarray, out_dir: str, idx: int) -> None:
     events = sample["depth_aligned_events"][0]
-    events_rgb = to_rgb_events(events)
+    events_rgb = events
 
     pred_rgb = depth_to_colormap(pred_np)
     gt_rgb = depth_to_colormap(target_np)
@@ -101,12 +74,12 @@ def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target
     ))
     error_rgb = depth_to_colormap(error)
 
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_events.png"), events_rgb)
-    depth_to_colormap_with_cbar(pred_np_raw, os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"))
-    depth_to_colormap_with_cbar(pred_np, os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"))
-    depth_to_colormap_with_cbar(target_np, os.path.join(out_dir, f"{idx:05d}_gt_depth.png"))
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_overlay.png"), overlay_rgb.astype(np.uint8))
-    plt.imsave(os.path.join(out_dir, f"{idx:05d}_error.png"), error_rgb)
+    save_rgb(os.path.join(out_dir, f"{idx:05d}_events.png"), events_rgb)
+    save_depth_colormap_with_cbar(os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"), pred_np_raw)
+    save_depth_colormap_with_cbar(os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"), pred_np)
+    save_depth_colormap_with_cbar(os.path.join(out_dir, f"{idx:05d}_gt_depth.png"), target_np)
+    save_image(os.path.join(out_dir, f"{idx:05d}_overlay.png"), overlay_rgb.astype(np.uint8))
+    save_depth_colormap_with_cbar(os.path.join(out_dir, f"{idx:05d}_error.png"), error_rgb)
 
 
 @torch.no_grad()

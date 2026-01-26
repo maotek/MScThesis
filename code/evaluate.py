@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import tqdm
 
+from networks.dae_wrapper import DAE
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events import Tencode, TencodePixelCount, VoxelGrid
@@ -23,9 +24,8 @@ from losses import normalized_depth_scale_and_shift
 from util import (
     depth_to_colormap,
     save_depth_colormap,
-    save_tencode,
+    save_rgb,
     save_voxelgrid,
-    tencode_to_uint8,
     voxelgrid_to_uint8,
 )
 
@@ -119,22 +119,28 @@ def make_representation(representation: str):
     if representation == "tencode" or representation == "rgb":
         return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
     if representation == "tencode_pixelcount":
-        return TencodePixelCount(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
+        return TencodePixelCount(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     if representation == "voxelgrid":
         return VoxelGrid(channels=5, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
     raise ValueError(f"Unsupported representation: {representation}")
 
 
-def make_dataset(sequence_path: str, time_window_ms: int, representation: str) -> DsecSequence:
-
+def make_dataset(sequence_path: str, time_window_ms: int, representation: str, model: str) -> DsecSequence:
     rep = make_representation(representation)
+    model = model.lower()
+    representation = representation.lower()
+
+    if representation == "rgb":
+        load_images = True
+    else:
+        load_images = False
 
     dataset = DsecSequence(
         sequence_path=sequence_path,
         event_representation=rep,
         time_window_ms=time_window_ms,
         augmentator=None,
-        load_images=False if representation != "rgb" else True,
+        load_images=load_images,
         overfit=False,
         sequence_window=1,
         sequence_step=1,
@@ -188,7 +194,7 @@ def save_visualization(
     events_chw = events.detach().cpu().squeeze(0)  # (C,H,W)
     events_path = os.path.join(seq_dir, f"{idx:05d}_events.png")
     if events_chw.shape[0] == 3:
-        save_tencode(events_path, events_chw)
+        save_rgb(events_path, events_chw)
     else:
         save_voxelgrid(events_path, events_chw)
 
@@ -204,13 +210,14 @@ def evaluate_sequence(
     clip_distance: float,
     use_scaleshift: bool,
     representation: str,
+    model_name: str,
     vis_interval: int,
     vis_dir: str,
 ) -> Tuple[Dict[str, float], int]:
     sequence_path = os.path.join(dsec_root, seq_name)
     if not os.path.isdir(sequence_path):
         raise FileNotFoundError(f"Sequence folder not found: {sequence_path}")
-    dataset = make_dataset(sequence_path, time_window_ms, representation)
+    dataset = make_dataset(sequence_path, time_window_ms, representation, model_name)
 
     metrics_sum: Dict[str, float] = {}
     num_frames = len(dataset)
@@ -228,6 +235,8 @@ def evaluate_sequence(
             events = torch.nn.functional.interpolate(events, size=(480, 640), mode='bilinear', align_corners=False)
         
         pred_depth = model(events)  # (1,1,H,W) or (depth, composite)
+
+        # e2vid_dav2_composite returns tuple (depth, composite)
         if isinstance(pred_depth, tuple):
             pred_depth = pred_depth[0]
     
@@ -236,6 +245,7 @@ def evaluate_sequence(
 
         target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
 
+        # Apply scale-shift normalization to match ground truth
         if use_scaleshift:
             scale, shift = normalized_depth_scale_and_shift(
                 pred_depth, target_proc_t, target_proc_t > 0
@@ -255,10 +265,11 @@ def evaluate_sequence(
             mask,
             event_frame=None,
             prefix="_",
-            debug=True,
+            debug=False,
             output_folder=None,
         )
 
+        # Visualization of predictions at intervals
         if vis_interval > 0 and idx % vis_interval == 0:
             save_visualization(
                 seq_name=seq_name,
@@ -348,7 +359,6 @@ def main() -> None:
             device=device,
         )
     elif args.model == "dae":
-        from networks.dae_wrapper import DAE
         model = DAE(
             checkpoint=os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth"),
             device=device,
@@ -381,6 +391,7 @@ def main() -> None:
             clip_distance=args.clip_distance,
             use_scaleshift=args.use_scaleshift,
             representation=args.representation,
+            model_name=args.model,
             vis_interval=args.vis_interval,
             vis_dir=vis_dir,
         )

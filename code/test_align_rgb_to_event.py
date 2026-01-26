@@ -5,7 +5,7 @@ import cv2
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events.events_representations import Tencode
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
-from util import tencode_to_uint8
+from util import rgb_to_uint8, save_image
 
 def ensure_dir(path: str) -> str:
     Path(path).mkdir(parents=True, exist_ok=True)
@@ -14,10 +14,10 @@ def ensure_dir(path: str) -> str:
 def main():
     sequence_path = "datasets/DSEC/data/validate/interlaken_00_c"  # Change as needed
     output_dir = ensure_dir("output/test_align_rgb_to_event")
-    idx = 60  # Change as needed
+    idx = 0  # Change as needed
 
     # Load sequence
-    rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
+    rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     dataset = DsecSequence(
         sequence_path=sequence_path,
         event_representation=rep,
@@ -39,7 +39,7 @@ def main():
 
     # Load tencode image aligned to RGB timestamps (T, 3, H, W)
     tencode_tensor = sample["rgb_aligned_events"][0]
-    tencode_img = tencode_to_uint8(tencode_tensor)
+    tencode_img = rgb_to_uint8(tencode_tensor)
 
     # Save for visualization
     aligned_path = os.path.join(output_dir, f"{idx:05d}_aligned_rgb.png")
@@ -50,10 +50,10 @@ def main():
     # Overlay in event camera frame (tencode matches event resolution)
     overlay = cv2.addWeighted(rgb_img, 0.6, tencode_img, 0.4, 0.0)
 
-    cv2.imwrite(aligned_path, cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR))
-    cv2.imwrite(rgb_path, cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR))
-    cv2.imwrite(tencode_path, cv2.cvtColor(tencode_img, cv2.COLOR_RGB2BGR))
-    cv2.imwrite(overlay_path, cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
+    save_image(aligned_path, rgb_img)
+    save_image(rgb_path, rgb_img)
+    save_image(tencode_path, tencode_img)
+    save_image(overlay_path, overlay)
     print(f"Saved aligned RGB to {aligned_path}")
     print(f"Saved RGB to {rgb_path}")
     print(f"Saved tencode to {tencode_path}")

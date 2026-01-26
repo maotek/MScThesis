@@ -1,11 +1,5 @@
 import torch
 from abc import ABC, abstractmethod
-import json
-from torch.nn import functional as F
-
-from .events_visualizations import voxel_grid_stereo_to_rgb, voxel_grid_mono_to_rgb, \
-                                    histogram_mono_to_rgb,histogram_stereo_to_rgb, \
-                                    tencode_mono_to_rgb, tencode_stereo_to_rgb
 
 
 class EventRepresentation(ABC):
@@ -18,25 +12,6 @@ class EventRepresentation(ABC):
     def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
         pass
 
-    @abstractmethod
-    def get_dataset_file_name(self):
-        pass
-
-    @abstractmethod
-    def to_rgb_stereo(self, representation_left, representation_right):
-        pass
-
-    @abstractmethod
-    def to_rgb_mono(self, representation):
-        pass
-
-    @abstractmethod
-    def info(self):
-        pass
-
-    @abstractmethod
-    def convert_from_voxels(self, voxels):
-        pass
 
 
 class VoxelGrid(EventRepresentation):
@@ -47,14 +22,6 @@ class VoxelGrid(EventRepresentation):
         self.normalize = normalize
         self.height = height
         self.width = width
-
-    @classmethod
-    def from_configuration(cls, configuration):
-        assert configuration["representation_type"] == "voxel_grid"
-        return cls(channels=int(configuration["channels"]),
-                   height=int(configuration["height"]),
-                   width=int(configuration["width"]),
-                   normalize=bool(configuration["normalize"]))
 
     def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
         assert x.shape == y.shape == pol.shape == time.shape
@@ -158,33 +125,6 @@ class VoxelGrid(EventRepresentation):
 
         return voxel_grid
 
-    def get_dataset_file_name(self, extra_str=""):
-        return f"voxel_grid_{extra_str}_{self.channels}"
-
-    def to_rgb_stereo(self, representation_left, representation_right):
-        return voxel_grid_stereo_to_rgb(representation_left, representation_right)
-
-    def to_rgb_mono(self, representation):
-        return voxel_grid_mono_to_rgb(representation)
-
-    def info(self):
-        output = {"representation_type": "voxel_grid",
-                  "channels": self.channels,
-                  "normalize": self.normalize,
-                  "height": self.height,
-                  "width": self.width,
-                 }
-        return output
-
-    def convert_from_voxels(self, voxel_grid):
-        _,h,w = voxel_grid.shape
-
-        # Compress/Expand original voxelgrid channels into self.channels... Use F.interpolate 5D
-        voxel_grid = F.interpolate(voxel_grid.unsqueeze(0).unsqueeze(0), size=(self.channels, h, w), mode='nearest')[0,0]
-        
-        if self.normalize:
-            voxel_grid = self.normalize_fn(voxel_grid)
-        return voxel_grid
 
 
 class Histogram(EventRepresentation):
@@ -194,13 +134,6 @@ class Histogram(EventRepresentation):
         self.height = height
         self.width = width
         self.remove_int_artifact = remove_int_artifact
-
-    @classmethod
-    def from_configuration(cls, configuration):
-        assert configuration["representation_type"] == "histogram"
-        return cls(height=int(configuration["height"]),
-                   width=int(configuration["width"]),
-                   remove_int_artifact=bool(configuration["remove_int_artifact"]),)
 
     def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
         assert x.shape == y.shape == pol.shape == time.shape
@@ -237,30 +170,6 @@ class Histogram(EventRepresentation):
             histo[histo > 200] = 200
         return histo
 
-    def get_dataset_file_name(self, extra_str=""):
-        return f"histogram_{extra_str}"
-
-    def to_rgb_stereo(self, histo_left, histo_right):
-        return histogram_stereo_to_rgb(histo_left, histo_right)
-
-    def to_rgb_mono(self, histo):
-        return histogram_mono_to_rgb(histo)
-
-    def info(self):
-        output = {"representation_type": "histogram",
-                  "remove_int_artifact": self.remove_int_artifact,
-                  "height": self.height,
-                  "width": self.width,
-                 }
-        return output
-    
-    def convert_from_voxels(self, voxels):
-        n,h,w = voxels.shape
-        histogram = torch.zeros((2,h,w), dtype=torch.float)
-        for i in range(n):
-            histogram[0,voxels[i]>0] += voxels[i][voxels[i]>0]
-            histogram[1,voxels[i]<0] += -voxels[i][voxels[i]<0]
-        return histogram
 
 
 class Tencode(EventRepresentation):
@@ -271,16 +180,6 @@ class Tencode(EventRepresentation):
         self.width = width
         self.normalize = normalize
         self.white_frame = white_frame
-
-    @classmethod
-    def from_configuration(cls, configuration):
-        assert configuration["representation_type"] == "tencode"
-        _white_frame = bool(configuration.get("white_frame", False))
-        print(f"TENCODE White frame: {_white_frame}")
-        return cls(height=int(configuration["height"]),
-                   width=int(configuration["width"]),
-                   normalize=bool(configuration["normalize"]),
-                   white_frame=_white_frame)
 
     def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
         assert x.shape == y.shape == pol.shape == time.shape
@@ -377,66 +276,14 @@ class Tencode(EventRepresentation):
 
         return tencode
 
-    def get_dataset_file_name(self, extra_str=""):
-        return f"tencode_{extra_str}"
-
-    def to_rgb_stereo(self, representation_left, representation_right):
-        return tencode_stereo_to_rgb(representation_left, representation_right)
-
-    def to_rgb_mono(self, representation):
-        return tencode_mono_to_rgb(representation)
-
-    def info(self):
-        output = {"representation_type": "tencode",
-                  "height": self.height,
-                  "width": self.width,
-                 }
-        return output
-    
-    def convert_from_voxels(self, voxels):
-        n,h,w = voxels.shape
-        g_map = [255.0 * (1-i) for i in torch.linspace(0,1,n)]
-        
-        if self.white_frame:
-            tencode = torch.full((3,h,w), 255.0, dtype=torch.float)
-        else:
-            tencode = torch.zeros((3,h,w), dtype=torch.float)
-
-        for i in range(n):
-            tencode[0,voxels[i]>0] = 255.0
-            tencode[1,voxels[i]>0] = g_map[i]
-            tencode[2,voxels[i]>0] = 0.0
-            tencode[0,voxels[i]<0] = 0.0
-            tencode[1,voxels[i]<0] = g_map[i]
-            tencode[2,voxels[i]<0] = 255.0
-
-        # If there are no events, we set the frame to white
-        if self.white_frame:
-            tencode[:, tencode.sum(dim=0) == 0] = 255.0
-
-        if self.normalize:
-            tencode = tencode / 255.0
-
-        return tencode
-
 
 class TencodePixelCount(EventRepresentation):
-
     def __init__(self, height: int, width: int, normalize: bool, white_frame: bool = False):
         super().__init__(height, width)
         self.height = height
         self.width = width
         self.normalize = normalize
         self.white_frame = white_frame
-
-    @classmethod
-    def from_configuration(cls, configuration):
-        assert configuration["representation_type"] == "tencode_pixelcount"
-        _white_frame = bool(configuration.get("white_frame", False))
-        return cls(height=int(configuration["height"]),
-                   width=int(configuration["width"]),
-                   normalize=bool(configuration["normalize"]),
-                   white_frame=_white_frame)
 
     def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
         assert x.shape == y.shape == pol.shape == time.shape
@@ -502,74 +349,3 @@ class TencodePixelCount(EventRepresentation):
                 representation = representation / 255.0
 
         return representation
-
-    def get_dataset_file_name(self, extra_str=""):
-        return f"tencode_pixelcount_{extra_str}"
-
-    def to_rgb_stereo(self, representation_left, representation_right):
-        return tencode_stereo_to_rgb(representation_left, representation_right)
-
-    def to_rgb_mono(self, representation):
-        return tencode_mono_to_rgb(representation)
-
-    def info(self):
-        output = {"representation_type": "tencode_pixelcount",
-              "height": self.height,
-              "width": self.width,
-              "white_frame": self.white_frame,
-             }
-        return output
-    
-    def convert_from_voxels(self, voxels):
-        n,h,w = voxels.shape
-        g_map = [255.0 * (1-i) for i in torch.linspace(0,1,n)]
-        base_value = 255.0 if self.white_frame else 0.0
-        representation = torch.full((3,h,w), base_value, dtype=torch.float)
-        count_map = torch.zeros((h,w), dtype=torch.float)
-        for i in range(n):
-            layer = voxels[i]
-            pos_mask = layer > 0
-            neg_mask = layer < 0
-            count_map += layer.abs()
-            if pos_mask.any() or neg_mask.any():
-                representation[1, pos_mask | neg_mask] = g_map[i]
-                representation[0, pos_mask] = 125.0
-                representation[0, neg_mask] = 255.0
-
-        nz_mask = count_map > 0
-        if nz_mask.any():
-            nz_counts = count_map[nz_mask]
-            cmin = nz_counts.min()
-            cmax = nz_counts.max()
-            if cmax > cmin:
-                scaled = 255.0 * (nz_counts - cmin) / (cmax - cmin)
-            else:
-                scaled = torch.full_like(nz_counts, 255.0)
-            representation[2, nz_mask] = scaled
-
-        if self.normalize:
-            representation = representation / 255.0
-
-        return representation
-
-def representation_from_config_file(info_json_path: str):
-    # Let's read the dataset info.json file
-    with open(info_json_path, "r") as info_json:
-        representation_info = json.load(info_json)
-    if representation_info["representation_type"] == "voxel_grid":
-        return VoxelGrid.from_configuration(representation_info)
-    elif representation_info["representation_type"] == "histogram":
-        return Histogram.from_configuration(representation_info)
-    elif representation_info["representation_type"] == "tencode":
-        return Tencode.from_configuration(representation_info)
-    elif representation_info["representation_type"] == "tencode_pixelcount":
-        return TencodePixelCount.from_configuration(representation_info)
-    else:
-        raise ValueError(f"Unknown representation type {representation_info['representation_type']}")
-
-KNOWN_REPRESENTATIONS = {
-    "voxel_grid": VoxelGrid,
-    "histogram": Histogram,
-    "tencode": Tencode,
-    "tencode_pixelcount": TencodePixelCount,
-}
