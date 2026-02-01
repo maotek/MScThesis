@@ -3,6 +3,9 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from pprint import pprint
+from evaluation import add_to_metrics
+
 import numpy as np
 import torch
 
@@ -85,7 +88,13 @@ def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target
 @torch.no_grad()
 def main() -> None:
     args = parse_args()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
 
     rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
     dataset = DsecSequence(
@@ -110,17 +119,6 @@ def main() -> None:
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
     depth_pred = model(events).squeeze(1)  # [B,H,W]
 
-    # Invert depth prediction if it's in inverse depth
-    # normalize per-image (so inversion is well-behaved)
-    # pred_min = depth_pred.amin(dim=(1,2), keepdim=True)
-    # pred_max = depth_pred.amax(dim=(1,2), keepdim=True)
-    # depth_pred = (depth_pred - pred_min) / (pred_max - pred_min + 1e-6)
-
-    # # invert if needed (now near small / far large, or the opposite as you prefer)
-    # depth_pred = 1.0 - depth_pred
-    # depth_pred = depth_pred * (pred_max - pred_min) + pred_min  # scale back to original range
-    # # depth_pred = depth_pred * 8.3576 - 58.7456
-    
     # Apply scale-shift normalization to match ground truth
     target_depth_t = sample["depth"][0].to(device)
     target_proc_t = prepare_target_data_torch(target_depth_t, 80.0)
@@ -134,6 +132,28 @@ def main() -> None:
     pred_np = np.clip(pred_depth_scaled.detach().cpu().squeeze().numpy(), 0, 80.0)
     pred_np_raw = np.clip(depth_pred.detach().cpu().squeeze().numpy(), 0, 80.0)
     target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), 80.0)
+
+
+    mask = np.ones_like(target_np, dtype=bool)
+
+    metrics_sum = add_to_metrics(
+        0,
+        {},
+        target_np,
+        pred_np,
+        mask,
+        event_frame=None,
+        prefix="_",
+        debug=False,
+        output_folder=None,
+    )
+
+    metrics_filtered = {
+        k: v
+        for k, v in metrics_sum.items()
+        if not k.startswith(("_10_", "_20_", "_30_"))
+    }
+    pprint(metrics_filtered)
 
     out_dir = ensure_dir(args.output_dir)
     visualize(sample, pred_np, pred_np_raw, target_np, out_dir, args.index)

@@ -10,7 +10,7 @@ import tqdm
 from networks.dae_wrapper import DAE
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events import Tencode, TencodePixelCount, VoxelGrid
+from datasets.events import Tencode, TencodePixelCount, VoxelGrid, ETNetVoxelGrid
 from networks.dav2_wrapper import Dav2
 from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
@@ -114,10 +114,15 @@ def select_device(device_str: Optional[str]) -> torch.device:
     return torch.device("cpu")
 
 
-def make_representation(representation: str):
+def make_representation(representation: str, model: str):
     representation = representation.lower()
-    if representation == "tencode" or representation == "rgb":
-        return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
+    if representation == "tencode":
+        if model == "dae":
+            return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
+        if model == "dav2":
+            return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
+    if representation == "rgb":
+        return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     if representation == "tencode_pixelcount":
         return TencodePixelCount(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     if representation == "voxelgrid":
@@ -126,7 +131,7 @@ def make_representation(representation: str):
 
 
 def make_dataset(sequence_path: str, time_window_ms: int, representation: str, model: str) -> DsecSequence:
-    rep = make_representation(representation)
+    rep = make_representation(representation, model)
     model = model.lower()
     representation = representation.lower()
 
@@ -239,6 +244,9 @@ def evaluate_sequence(
         # e2vid_dav2_composite returns tuple (depth, composite)
         if isinstance(pred_depth, tuple):
             pred_depth = pred_depth[0]
+
+        pred_depth = 1.0 / (pred_depth + 1)  # convert to depth 
+        pred_depth = torch.clamp(pred_depth, 0, 80.0)
     
         pred_depth = pred_depth.squeeze(1)  # (1,H,W)
         pred_np_raw = pred_depth.detach().cpu().squeeze().numpy()
@@ -363,6 +371,9 @@ def main() -> None:
             checkpoint=os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth"),
             device=device,
             input_size=518,
+            inv_prediction=True,
+            activation="relu",
+            scale_factor=1.0,
         )
     elif args.model == "etnet_dav2":
         model = ETNetDav2(

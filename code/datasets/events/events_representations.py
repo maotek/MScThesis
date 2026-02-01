@@ -126,6 +126,154 @@ class VoxelGrid(EventRepresentation):
         return voxel_grid
 
 
+class ETNetVoxelGrid(EventRepresentation):
+    def __init__(
+        self,
+        channels: int,
+        height: int,
+        width: int,
+        combined_voxel_channels: bool = True,
+        temporal_bilinear: bool = True,
+    ):
+        super().__init__(height, width)
+        self.channels = channels
+        self.combined_voxel_channels = combined_voxel_channels
+        self.temporal_bilinear = temporal_bilinear
+        self.height = height
+        self.width = width
+        if combined_voxel_channels:
+            self.num_bins = channels
+        else:
+            if channels % 2 != 0:
+                raise ValueError("channels must be even when combined_voxel_channels=False")
+            self.num_bins = channels // 2
+
+    def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
+        assert x.shape == y.shape == pol.shape == time.shape
+        assert x.ndim == 1
+
+        device = x.device
+        if x.numel() == 0:
+            return torch.zeros((self.channels, self.height, self.width), dtype=torch.float32, device=device)
+
+        with torch.no_grad():
+            # Follows ET-Net voxelization in models/etnet/events_contrast_maximization/utils/event_utils.py
+            xs = x.to(device)
+            ys = y.to(device)
+            ts = time.to(device)
+            ps = pol.to(device).float()
+            if ps.min() >= 0 and ps.max() <= 1:
+                ps = ps * 2.0 - 1.0
+
+            dt = ts[-1] - ts[0]
+            if dt == 0:
+                dt = torch.tensor(1.0, device=device)
+            t_norm = (ts - ts[0]) / dt * (self.num_bins - 1)
+
+            valid = (
+                (xs >= 0)
+                & (xs < self.width)
+                & (ys >= 0)
+                & (ys < self.height)
+            )
+            if not torch.all(valid):
+                xs = xs[valid]
+                ys = ys[valid]
+                ps = ps[valid]
+                t_norm = t_norm[valid]
+
+            if xs.numel() == 0:
+                return torch.zeros((self.channels, self.height, self.width), dtype=torch.float32, device=device)
+
+            voxel_bins = []
+            zeros = torch.zeros_like(t_norm)
+            xs_long = xs.long()
+            ys_long = ys.long()
+            for bi in range(self.num_bins):
+                if self.temporal_bilinear:
+                    weights = ps * torch.max(zeros, 1.0 - torch.abs(t_norm - bi))
+                    img = torch.zeros((self.height, self.width), dtype=torch.float32, device=device)
+                    img.index_put_((ys_long, xs_long), weights, accumulate=True)
+                else:
+                    img = torch.zeros((self.height, self.width), dtype=torch.float32, device=device)
+                    img.index_put_((ys_long, xs_long), ps, accumulate=True)
+                voxel_bins.append(img)
+
+            voxel_grid = torch.stack(voxel_bins, dim=0)
+
+            if not self.combined_voxel_channels:
+                pos = torch.clamp(voxel_grid, min=0.0)
+                neg = torch.clamp(-voxel_grid, min=0.0)
+                voxel_grid = torch.cat([pos, neg], dim=0)
+
+        return voxel_grid
+
+
+class E2vidVoxelGrid(EventRepresentation):
+    def __init__(self, channels: int, height: int, width: int):
+        super().__init__(height, width)
+        self.channels = channels
+        self.height = height
+        self.width = width
+
+    def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
+        assert x.shape == y.shape == pol.shape == time.shape
+        assert x.ndim == 1
+
+        device = x.device
+        if x.numel() == 0:
+            return torch.zeros((self.channels, self.height, self.width), dtype=torch.float32, device=device)
+
+        with torch.no_grad():
+            # Follows E2VID voxel grid in models/rpg_e2vid/utils/inference_utils.py
+            voxel_grid = torch.zeros(
+                self.channels, self.height, self.width, dtype=torch.float32, device=device
+            ).flatten()
+
+            first_stamp = time[0]
+            last_stamp = time[-1]
+            delta_t = last_stamp - first_stamp
+            if delta_t == 0:
+                delta_t = torch.tensor(1.0, device=device)
+
+            ts = (self.channels - 1) * (time - first_stamp) / delta_t
+            xs = x.long()
+            ys = y.long()
+            pols = pol.float()
+            pols = torch.where(pols == 0, torch.tensor(-1.0, device=device), pols)
+
+            tis = torch.floor(ts)
+            tis_long = tis.long()
+            dts = ts - tis
+            vals_left = pols * (1.0 - dts)
+            vals_right = pols * dts
+
+            valid = (
+                (tis < self.channels)
+                & (tis >= 0)
+                & (xs >= 0)
+                & (xs < self.width)
+                & (ys >= 0)
+                & (ys < self.height)
+            )
+            idx_left = xs[valid] + ys[valid] * self.width + tis_long[valid] * self.width * self.height
+            voxel_grid.index_add_(0, idx_left, vals_left[valid])
+
+            valid = (
+                ((tis + 1) < self.channels)
+                & (tis >= 0)
+                & (xs >= 0)
+                & (xs < self.width)
+                & (ys >= 0)
+                & (ys < self.height)
+            )
+            idx_right = xs[valid] + ys[valid] * self.width + (tis_long[valid] + 1) * self.width * self.height
+            voxel_grid.index_add_(0, idx_right, vals_right[valid])
+
+            voxel_grid = voxel_grid.view(self.channels, self.height, self.width)
+
+        return voxel_grid
+
 
 class Histogram(EventRepresentation):
 
@@ -277,7 +425,9 @@ class Tencode(EventRepresentation):
         return tencode
 
 
+
 class TencodePixelCount(EventRepresentation):
+    
     def __init__(self, height: int, width: int, normalize: bool, white_frame: bool = False):
         super().__init__(height, width)
         self.height = height
@@ -349,3 +499,78 @@ class TencodePixelCount(EventRepresentation):
                 representation = representation / 255.0
 
         return representation
+
+
+class E2DepthVoxelGrid(EventRepresentation):
+    """
+    Voxel grid representation used by E2Depth with bilinear temporal interpolation.
+    Based on events_to_voxel_grid_pytorch from models/rpg_e2depth/utils/event_tensor_utils.py
+    """
+    def __init__(self, channels: int, height: int, width: int):
+        super().__init__(height, width)
+        self.channels = channels
+        self.height = height
+        self.width = width
+
+    def convert(self, x: torch.Tensor, y: torch.Tensor, pol: torch.Tensor, time: torch.Tensor):
+        assert x.shape == y.shape == pol.shape == time.shape
+        assert x.ndim == 1
+
+        device = x.device
+        if x.numel() == 0:
+            return torch.zeros((self.channels, self.height, self.width), dtype=torch.float32, device=device)
+
+        with torch.no_grad():
+            # Flatten voxel grid for index-based operations
+            voxel_grid = torch.zeros(
+                self.channels, self.height, self.width, dtype=torch.float32, device=device
+            ).flatten()
+
+            # Normalize timestamps to [0, num_bins-1]
+            first_stamp = time[0]
+            last_stamp = time[-1]
+            delta_t = last_stamp - first_stamp
+            if delta_t == 0:
+                delta_t = torch.tensor(1.0, device=device)
+
+            ts = (self.channels - 1) * (time - first_stamp) / delta_t
+            xs = x.long()
+            ys = y.long()
+            pols = pol.float()
+            # Convert polarity from [0,1] to [-1,1] if needed
+            pols = torch.where(pols == 0, torch.tensor(-1.0, device=device), pols)
+
+            # Bilinear temporal interpolation
+            tis = torch.floor(ts)
+            tis_long = tis.long()
+            dts = ts - tis
+            vals_left = pols * (1.0 - dts)
+            vals_right = pols * dts
+
+            # Add events to left bin
+            valid = (
+                (tis < self.channels)
+                & (tis >= 0)
+                & (xs >= 0)
+                & (xs < self.width)
+                & (ys >= 0)
+                & (ys < self.height)
+            )
+            idx_left = xs[valid] + ys[valid] * self.width + tis_long[valid] * self.width * self.height
+            voxel_grid.index_add_(0, idx_left, vals_left[valid])
+
+            # Add events to right bin
+            valid = (
+                ((tis + 1) < self.channels)
+                & (tis >= 0)
+                & (xs >= 0)
+                & (xs < self.width)
+                & (ys >= 0)
+                & (ys < self.height)
+            )
+            idx_right = xs[valid] + ys[valid] * self.width + (tis_long[valid] + 1) * self.width * self.height
+            voxel_grid.index_add_(0, idx_right, vals_right[valid])
+
+            voxel_grid = voxel_grid.view(self.channels, self.height, self.width)
+
+        return voxel_grid

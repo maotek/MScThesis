@@ -5,9 +5,6 @@ from typing import Optional
 import torch
 import torch.nn.functional as F
 
-import numpy as np
-import cv2
-
 from models.dav2.depth_anything_v2.dpt import DepthAnythingV2
 
 
@@ -83,7 +80,12 @@ class Dav2(torch.nn.Module):
         """
         assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
         orig_hw = x.shape[-2:]
-        x_resized = F.interpolate(x, size=(self.input_size, self.input_size), mode="bilinear", align_corners=False)
+        x_resized = F.interpolate(
+            x,
+            size=(self.input_size, self.input_size),
+            mode="bilinear",
+            align_corners=False,
+        )
         depth = self.model(x_resized)
         if depth.dim() == 3:
             depth = depth.unsqueeze(1)
@@ -91,8 +93,3 @@ class Dav2(torch.nn.Module):
             depth = depth[:, :1]
         depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=False)
         return depth
-
-    def to_device(self, device: torch.device) -> "Dav2":
-        self.device = device
-        self.model.to(device)
-        return self

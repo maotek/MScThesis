@@ -3,12 +3,15 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from evaluation import add_to_metrics
+from pprint import pprint
+
 import numpy as np
 import torch
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events.events_representations import VoxelGrid
+from datasets.events.events_representations import VoxelGrid, E2vidVoxelGrid
 from networks.e2vid_dav2 import E2VIDDav2
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
@@ -23,7 +26,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_c",
+        default="datasets/DSEC/data/validate/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
@@ -107,7 +110,7 @@ def main() -> None:
         else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     )
 
-    rep = VoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
+    rep = E2vidVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
     dataset = DsecSequence(
         sequence_path=args.sequence,
         event_representation=rep,
@@ -127,7 +130,7 @@ def main() -> None:
 
     model = E2VIDDav2(
         e2vid_weights=args.e2vid_checkpoint,
-        dav2_encoder="vitb",
+        dav2_encoder="vits",
         dav2_checkpoint=args.dav2_checkpoint,
         device=device,
     )
@@ -148,6 +151,27 @@ def main() -> None:
     pred_np = np.clip(pred_depth_scaled.detach().cpu().squeeze().numpy(), 0, 80.0)
     pred_np_raw = np.clip(depth.squeeze().detach().cpu().numpy(), 0, 80.0)
     target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), 80.0)
+
+    mask = np.ones_like(target_np, dtype=bool)
+
+    metrics_sum = add_to_metrics(
+        0,
+        {},
+        target_np,
+        pred_np,
+        mask,
+        event_frame=None,
+        prefix="_",
+        debug=False,
+        output_folder=None,
+    )
+
+    metrics_filtered = {
+        k: v
+        for k, v in metrics_sum.items()
+        if not k.startswith(("_10_", "_20_", "_30_"))
+    }
+    pprint(metrics_filtered)
 
     out_dir = ensure_dir(args.output_dir)
     visualize(sample, pred_np, pred_np_raw, target_np, out_dir, args.index)

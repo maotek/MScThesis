@@ -19,10 +19,15 @@ class ETNetDav2(torch.nn.Module):
         dav2_encoder: str = "vits",
         dav2_checkpoint: Optional[str] = None,
         device: Optional[torch.device] = None,
+        use_minmax_norm: bool = True,
     ) -> None:
         super().__init__()
         self.device = self._select_device(device)
-        self.etnet = ETNet(checkpoint_path=etnet_checkpoint, device=self.device)
+        self.etnet = ETNet(
+            checkpoint_path=etnet_checkpoint,
+            device=self.device,
+            use_minmax_norm=use_minmax_norm,
+        )
         self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
         self.to(self.device)
 

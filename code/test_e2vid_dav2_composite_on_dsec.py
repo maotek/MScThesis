@@ -5,7 +5,7 @@ import torch
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events.events_representations import VoxelGrid
+from datasets.events.events_representations import VoxelGrid, E2vidVoxelGrid
 from networks.e2vid_dav2_composite import E2VIDDav2Composite, E2VIDDav2Composite2
 from util import save_depth_colormap, save_voxelgrid
 
@@ -88,7 +88,7 @@ def main() -> None:
         else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     )
 
-    rep = VoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
+    rep = E2vidVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
     dataset = DsecSequence(
         sequence_path=args.sequence,
         event_representation=rep,

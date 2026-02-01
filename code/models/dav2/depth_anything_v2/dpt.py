@@ -1,9 +1,5 @@
-import os
-from typing import Tuple
-
 import cv2
 import torch
-import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.transforms import Compose
@@ -127,14 +123,14 @@ class DPTHead(nn.Module):
                 x = self.readout_projects[i](torch.cat((x, readout), -1))
             else:
                 x = x[0]
-
-            x = x.permute(0, 2, 1).contiguous().view(x.shape[0], x.shape[-1], patch_h, patch_w)
-
+            
+            x = x.permute(0, 2, 1).reshape((x.shape[0], x.shape[-1], patch_h, patch_w))
+            
             x = self.projects[i](x)
-
             x = self.resize_layers[i](x)
             
             out.append(x)
+        
         layer_1, layer_2, layer_3, layer_4 = out
         
         layer_1_rn = self.scratch.layer1_rn(layer_1)
@@ -179,58 +175,19 @@ class DepthAnythingV2(nn.Module):
     
     def forward(self, x):
         patch_h, patch_w = x.shape[-2] // 14, x.shape[-1] // 14
-        # print("patch_h, patch_w:", patch_h, patch_w)
+        
         features = self.pretrained.get_intermediate_layers(x, self.intermediate_layer_idx[self.encoder], return_class_token=True)
-        # print("features lengths:", [f[0].shape for f in features])
+        
         depth = self.depth_head(features, patch_h, patch_w)
-        # print("depth shape before relu:", depth.shape)
         depth = F.relu(depth)
-        # print("depth shape after relu:", depth.shape)
         
         return depth.squeeze(1)
-
-    def upsample_depth(self, depth: torch.Tensor, target_hw: Tuple[int, int], mode: str = "bilinear") -> torch.Tensor:
-        if depth.dim() == 3:
-            depth = depth.unsqueeze(1)
-        return F.interpolate(depth, target_hw, mode=mode, align_corners=True).squeeze(1)
     
     @torch.no_grad()
     def infer_image(self, raw_image, input_size=518):
-        print("raw_image shape pixel:", raw_image.shape)
         image, (h, w) = self.image2tensor(raw_image, input_size)
-        print("image shape resized pixel:", image.shape)
-
-        # # Save the transformed image for visualization
-        # save_folder = 'vis_depth'
-        # if not os.path.exists(save_folder):
-        #     os.makedirs(save_folder)
-            
-        # # 1. Save the normalized image
-        # normalized_img_to_save = image.squeeze(0).cpu().numpy()
-        # normalized_img_to_save = np.transpose(normalized_img_to_save, (1, 2, 0)) # from C, H, W to H, W, C
-        # # Rescale for visualization
-        # min_val, max_val = normalized_img_to_save.min(), normalized_img_to_save.max()
-        # # normalized_img_to_save = (normalized_img_to_save - min_val) / (max_val - min_val)
-        # # normalized_img_to_save = (normalized_img_to_save * 255).astype(np.uint8)
-        # normalized_img_to_save = cv2.cvtColor(normalized_img_to_save, cv2.COLOR_RGB2BGR)
-        # cv2.imwrite(os.path.join(save_folder, 'transformed_image_normalized.png'), normalized_img_to_save)
-
-        # # 2. Save the not-normalized (but resized) image
-        # img_to_save = image.squeeze(0).cpu().numpy()
-        # img_to_save = np.transpose(img_to_save, (1, 2, 0)) # from C, H, W to H, W, C
-        
-        # # Denormalize
-        # mean = np.array([0.485, 0.456, 0.406])
-        # std = np.array([0.229, 0.224, 0.225])
-        # img_to_save = (img_to_save * std) + mean
-        
-        # img_to_save = (img_to_save * 255).astype(np.uint8)
-        # img_to_save = cv2.cvtColor(img_to_save, cv2.COLOR_RGB2BGR)
-        
-        # cv2.imwrite(os.path.join(save_folder, 'transformed_image_not_normalized.png'), img_to_save)
         
         depth = self.forward(image)
-        print("depth shape:", depth.shape)
         
         depth = F.interpolate(depth[:, None], (h, w), mode="bilinear", align_corners=True)[0, 0]
         

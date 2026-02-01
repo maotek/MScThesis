@@ -8,7 +8,7 @@ import torch
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events.events_representations import VoxelGrid
+from datasets.events.events_representations import VoxelGrid, E2vidVoxelGrid
 from networks.e2vid_wrapper import load_e2vid
 from util import save_grayscale, save_voxelgrid
 
@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_c",
+        default="datasets/DSEC/data/validate/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument("--index", type=int, default=0, help="Index within the sequence to visualize (depth-aligned events).")
@@ -65,7 +65,7 @@ def main() -> None:
         else torch.device("cuda" if torch.cuda.is_available() else "cpu")
     )
 
-    rep = VoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
+    rep = E2vidVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
     dataset = DsecSequence(
         sequence_path=args.sequence,
         event_representation=rep,

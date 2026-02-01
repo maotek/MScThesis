@@ -113,6 +113,7 @@ class DsecSequence(Dataset):
         sequence_path: str,
         event_representation: EventRepresentation,
         time_window_ms: int,
+        event_window_method: str = "fixed_window",
         augmentator: Optional[Augmentator] = None,
         load_images: bool = False,
         overfit: bool = False,
@@ -128,6 +129,7 @@ class DsecSequence(Dataset):
         self.augmentator = augmentator
         self.self_supervised = self_supervised
         self.postfix = postfix
+        self.event_window_method = event_window_method
 
         print("Self-supervised mode:", self.self_supervised)
 
@@ -159,12 +161,12 @@ class DsecSequence(Dataset):
             self._load_image_files()
             self._align_timestamps()
 
-        # Setup event windows for each timestamp
-        self._setup_event_windows(delta_t_us)
-
         # Load event data and calibration
         self._load_event_data(sequence_path)
         self._load_calibration(sequence_path)
+        
+        # Setup event windows for each timestamp
+        self._setup_event_windows(delta_t_us)
 
         # Adjust dataset length for sequences
         self._adjust_dataset_length()
@@ -268,20 +270,35 @@ class DsecSequence(Dataset):
 
     def _setup_event_windows(self, delta_t_us: int) -> None:
         """Setup event time windows for each timestamp."""
-        # Create event windows aligned with disparity timestamps
-        self.disparity_aligned_event_windows = []
-        for timestamp in self.timestamps_disparity:
-            self.disparity_aligned_event_windows.append(
-                (timestamp - delta_t_us, timestamp)
-            )
-            
-        # Create event windows aligned with RGB timestamps if needed
-        self.rgb_aligned_event_windows = []
-        if self.load_images:
-            for timestamp in self.timestamps_rgb:
-                self.rgb_aligned_event_windows.append(
+        if self.event_window_method == "between_frames":
+            start_time = self.event_slicer["left"].get_start_time_us()
+            self.disparity_aligned_event_windows = []
+            prev = start_time
+            for timestamp in self.timestamps_disparity:
+                self.disparity_aligned_event_windows.append((prev, timestamp))
+                prev = timestamp
+
+            self.rgb_aligned_event_windows = []
+            if self.load_images:
+                prev = start_time
+                for timestamp in self.timestamps_rgb:
+                    self.rgb_aligned_event_windows.append((prev, timestamp))
+                    prev = timestamp
+        else:
+            # Create event windows aligned with disparity timestamps
+            self.disparity_aligned_event_windows = []
+            for timestamp in self.timestamps_disparity:
+                self.disparity_aligned_event_windows.append(
                     (timestamp - delta_t_us, timestamp)
                 )
+                
+            # Create event windows aligned with RGB timestamps if needed
+            self.rgb_aligned_event_windows = []
+            if self.load_images:
+                for timestamp in self.timestamps_rgb:
+                    self.rgb_aligned_event_windows.append(
+                        (timestamp - delta_t_us, timestamp)
+                    )
 
     def _load_event_data(self, sequence_path: str) -> None:
         """Load event data files and rectification maps."""
@@ -578,7 +595,7 @@ class DsecSequence(Dataset):
             disparity = self.get_disparity_map(disparity_path)
             
             # Convert disparity to depth if needed (for supervised training)
-            depth = self.disparity2depth(disparity) if self.self_supervised else disparity
+            depth = self.disparity2depth(disparity) if not self.self_supervised else disparity
             # depth = self.disparity2depth(disparity)         
             to_return["depth"] = depth
 
@@ -633,6 +650,7 @@ class DsecSequence(Dataset):
                     focal = abs(self.q_event[2, 3])
                     baseline = abs(1.0 / self.q_event[3, 2])
                     depth_np = (focal * baseline) / (disp_np + 1e-6)
+                    # depth_np[disp_np == 0] = 80.0  # Cap max depth for warping
                     # visualize_depth(depth_np, title="Depth Map for Warping")
                     left_image = warp_rgb_to_event(
                         left_image,
