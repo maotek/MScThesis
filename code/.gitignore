@@ -23,6 +23,7 @@ build/
 *.swo
 datasets/DSEC/data
 **/**.pth
+**/**.pth.tar
 **/**.hdf5
 **/**.ckpt
 **/**.npz
