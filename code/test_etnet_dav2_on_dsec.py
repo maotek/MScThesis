@@ -8,14 +8,16 @@ from pprint import pprint
 
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
+from datasets.utils import fetch_preprocessing
 from datasets.events.events_representations import VoxelGrid, ETNetVoxelGrid
 from networks.etnet_dav2 import ETNetDav2
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
-from util import depth_to_colormap, save_image, save_voxelgrid
+from util import depth_to_colormap, voxelgrid_to_uint8, save_image, save_voxelgrid
 
 
 def parse_args() -> argparse.Namespace:
@@ -32,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--index",
         type=int,
-        default=0,
+        default=50,
         help="Index within the sequence to visualize (depth-aligned events).",
     )
     parser.add_argument(
@@ -95,11 +97,52 @@ def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target
     # Overlay: blend scaled prediction and ground truth
     overlay_rgb = 0.5 * pred_rgb + 0.5 * gt_rgb
 
+    # Error map: absolute difference, masked to valid GT pixels
+    error = np.abs(pred_np - target_np)
+    error[target_np == 0] = 0
+    error_rgb = depth_to_colormap(error)
+
+    def depth_limits(arr: np.ndarray, fallback=(0.0, 80.0)) -> tuple[float, float]:
+        vmin = float(np.nanmin(arr))
+        vmax = float(np.nanmax(arr))
+        if vmax - vmin < 1e-6:
+            return fallback
+        return vmin, vmax
+
+    pred_raw_min, pred_raw_max = depth_limits(pred_np_raw)
+    pred_min, pred_max = depth_limits(pred_np)
+    gt_min, gt_max = depth_limits(target_np)
+    error_vmax = max(float(error.max()), 1e-6)
+
+    events_uint8 = voxelgrid_to_uint8(events_voxel)
+    grid_items = [
+        ("Events", events_uint8, None),
+        ("Pred (raw)", pred_np_raw, ("viridis", pred_raw_min, pred_raw_max)),
+        ("Pred (scaled)", pred_np, ("viridis", pred_min, pred_max)),
+        ("GT", target_np, ("viridis", gt_min, gt_max)),
+        ("Overlay", overlay_rgb.astype(np.uint8), None),
+        ("Error", error, ("magma", 0.0, error_vmax)),
+    ]
+
     save_voxelgrid(os.path.join(out_dir, f"{idx:05d}_events.png"), events_voxel)
     save_image(os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"), pred_raw_rgb)
     save_image(os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"), pred_rgb)
     save_image(os.path.join(out_dir, f"{idx:05d}_gt_depth.png"), gt_rgb)
     save_image(os.path.join(out_dir, f"{idx:05d}_overlay.png"), overlay_rgb.astype(np.uint8))
+    save_image(os.path.join(out_dir, f"{idx:05d}_error.png"), error_rgb)
+    fig, axes = plt.subplots(2, 3, figsize=(12, 6))
+    for ax, (title, img, cmap_cfg) in zip(axes.flat, grid_items):
+        if cmap_cfg is None:
+            im = ax.imshow(img)
+        else:
+            cmap, vmin, vmax = cmap_cfg
+            im = ax.imshow(img, cmap=cmap, vmin=vmin, vmax=vmax)
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        ax.set_title(title)
+        ax.axis("off")
+    plt.tight_layout()
+    fig.savefig(os.path.join(out_dir, f"{idx:05d}_grid.png"), bbox_inches="tight", pad_inches=0)
+    plt.close(fig)
 
 
 @torch.no_grad()
@@ -113,13 +156,21 @@ def main() -> None:
     )
 
     rep = ETNetVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
+    preprocess_config = [
+        {
+            "preprocessing_type": "CenterCrop",
+            "height": 320,
+            "width": 640,
+        }
+    ]
+    augmentator = fetch_preprocessing(preprocess_config)
 
     dataset = DsecSequence(
         sequence_path=args.sequence,
         event_representation=rep,
         time_window_ms=args.time_window_ms,
         event_window_method="between_frames",
-        augmentator=None,
+        augmentator=augmentator,
         load_images=True,
         overfit=False,
         sequence_window=1,
@@ -145,6 +196,9 @@ def main() -> None:
     intensity = model.etnet(events)  # (B,1,H,W) or (B,3,H,W)
     intensity_3ch = intensity.repeat(1, 3, 1, 1) if intensity.shape[1] == 1 else intensity
     depth = model.dav2(intensity_3ch)  # (B,1,H,W)
+
+    depth = 1.0 / (depth + 1) # Convert from inverse depth to depth in meters
+    depth = torch.clamp(depth, 0.0, 80.0)
 
     # Apply scale-shift normalization to match ground truth
     target_depth_t = sample["depth"][0].to(device)

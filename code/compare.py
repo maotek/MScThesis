@@ -9,6 +9,15 @@ def is_threshold_metric(name: str) -> bool:
     return name.startswith("_10") or name.startswith("_20") or name.startswith("_30")
 
 
+def is_useless_metric(name: str) -> bool:
+    return name in {
+        "_mean_target_depth",
+        "_median_target_depth",
+        "_mean_prediction_depth",
+        "_median_prediction_depth",
+    }
+
+
 def read_metrics(path: str) -> Dict[str, str]:
     metrics: Dict[str, str] = {}
     with open(path, newline="") as f:
@@ -22,7 +31,7 @@ def read_metrics(path: str) -> Dict[str, str]:
         if not row:
             continue
         name = row[0].strip()
-        if not name or is_threshold_metric(name):
+        if not name or is_threshold_metric(name) or is_useless_metric(name):
             continue
         val = row[mean_idx].strip() if len(row) > mean_idx else ""
         metrics[name] = val

@@ -4,6 +4,10 @@ from typing import Optional
 
 import torch
 import torch.nn.functional as F
+import cv2
+import numpy as np
+
+from models.dav2.depth_anything_v2.util.transform import Resize, NormalizeImage, PrepareForNet
 
 from models.dav2.depth_anything_v2.dpt import DepthAnythingV2
 
@@ -32,12 +36,14 @@ class Dav2(torch.nn.Module):
         checkpoint: Optional[str] = None,
         device: Optional[torch.device] = None,
         input_size: int = 518,
+        rgb: bool = False,
     ) -> None:
         super().__init__()
         assert encoder in MODEL_CONFIGS, f"Unknown encoder {encoder}"
         self.encoder = encoder
         self.input_size = input_size
         self.device = self._select_device(device)
+        self.rgb = rgb
 
         ckpt = checkpoint or os.path.join(
             Path(__file__).resolve().parent.parent,
@@ -79,6 +85,9 @@ class Dav2(torch.nn.Module):
             depth: (B,1,H,W) resized back to input spatial size.
         """
         assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
+        if self.rgb:
+            return self.infer_image(x)
+
         orig_hw = x.shape[-2:]
         x_resized = F.interpolate(
             x,
@@ -92,4 +101,56 @@ class Dav2(torch.nn.Module):
         elif depth.shape[1] != 1:
             depth = depth[:, :1]
         depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=False)
+        return depth
+
+    @torch.no_grad()
+    def infer_image(self, x: torch.Tensor) -> torch.Tensor:
+        """Inference path matching DepthAnythingV2 infer_image.
+
+        Uses aspect-ratio preserving resize and ImageNet normalization as implemented
+        in the original DepthAnythingV2 repo.
+        """
+        assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
+        orig_hw = x.shape[-2:]
+
+        transform = [
+            Resize(
+                width=self.input_size,
+                height=self.input_size,
+                resize_target=False,
+                keep_aspect_ratio=True,
+                ensure_multiple_of=14,
+                resize_method="lower_bound",
+                image_interpolation_method=cv2.INTER_CUBIC,
+            ),
+            NormalizeImage(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            PrepareForNet(),
+        ]
+
+        images = []
+        for img in x:
+            img_np = img.detach().cpu().permute(1, 2, 0).numpy()
+            # DSEC loader returns float [0,1] in RGB already
+            # img_np = (img_np.clip(0.0, 1.0) * 255.0).astype("uint8")
+            # img_bgr = img_np[..., ::-1]
+            # img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB) / 255.0
+            # sample = {"image": img_rgb}
+            sample = {"image": img_np}
+            for t in transform:
+                sample = t(sample)
+
+            image_t = torch.from_numpy(sample["image"]).unsqueeze(0)
+            images.append(image_t)
+
+        image_batch = torch.cat(images, dim=0).to(self.device)
+
+        depth = self.model(image_batch)
+        if depth.dim() == 3:
+            depth = depth.unsqueeze(1)
+        elif depth.shape[1] != 1:
+            depth = depth[:, :1]
+
+        if depth.shape[-2:] != orig_hw:
+            depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=True)
+
         return depth

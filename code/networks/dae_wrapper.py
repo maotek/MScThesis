@@ -30,17 +30,19 @@ class DAE(torch.nn.Module):
         checkpoint: Optional[str] = None,
         device: Optional[torch.device] = None,
         input_size: int = 518,
-        activation: str = "softplus",
+        activation: str = "relu",
         scale_factor: float = 1.0,
-        inv_prediction: bool = True,
+        inv_prediction: bool = False,
         freeze_encoder: bool = False,
         input_channels: int = 3,
         nopretrain: bool = False,
+        use_infer_image: bool = False,
     ) -> None:
         super().__init__()
         self.encoder = encoder
         self.input_size = input_size
         self.device = self._select_device(device)
+        self.use_infer_image = use_infer_image
 
         ckpt = checkpoint or os.path.join(
             Path(__file__).resolve().parent.parent,
@@ -91,6 +93,13 @@ class DAE(torch.nn.Module):
             depth: (B,1,H,W) resized back to input spatial size.
         """
         assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
+        if self.use_infer_image:
+            return self.infer_image(
+                x,
+                input_size_width=self.input_size,
+                input_size_height=self.input_size,
+            )
+
         orig_hw = x.shape[-2:]
         x_resized = F.interpolate(
             x,
@@ -105,12 +114,6 @@ class DAE(torch.nn.Module):
             depth = depth[:, :1]
         depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=False)
         return depth
-    
-        # return self.infer_image(
-        #     x,
-        #     input_size_width=self.input_size,
-        #     input_size_height=self.input_size,
-        # )
 
     @torch.no_grad()
     def infer_image(
@@ -134,13 +137,6 @@ class DAE(torch.nn.Module):
             input_size_height=input_size_height,
             extract_features=extract_features,
         )
-        if extract_features:
-            depth, features = output
-            if depth.dim() == 3:
-                depth = depth.unsqueeze(1)
-            elif depth.shape[1] != 1:
-                depth = depth[:, :1]
-            return depth, features
         depth = output
         if depth.dim() == 3:
             depth = depth.unsqueeze(1)

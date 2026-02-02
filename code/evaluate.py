@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import tqdm
 
+from datasets.events.events_representations import E2vidVoxelGrid
 from networks.dae_wrapper import DAE
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
@@ -20,6 +21,7 @@ from evaluation import (
     prepare_target_data,
     prepare_target_data_torch,
 )
+from datasets.utils import fetch_preprocessing
 from losses import normalized_depth_scale_and_shift
 from util import (
     depth_to_colormap,
@@ -118,14 +120,18 @@ def make_representation(representation: str, model: str):
     representation = representation.lower()
     if representation == "tencode":
         if model == "dae":
-            return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
-        if model == "dav2":
             return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
+        if model == "dav2":
+            return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     if representation == "rgb":
         return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     if representation == "tencode_pixelcount":
         return TencodePixelCount(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     if representation == "voxelgrid":
+        if model == "e2vid_dav2":
+            return E2vidVoxelGrid(channels=5, height=DSEC_HEIGHT, width=DSEC_WIDTH)
+        if model == "etnet_dav2":
+            return ETNetVoxelGrid(channels=5, height=DSEC_HEIGHT, width=DSEC_WIDTH)
         return VoxelGrid(channels=5, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
     raise ValueError(f"Unsupported representation: {representation}")
 
@@ -140,11 +146,20 @@ def make_dataset(sequence_path: str, time_window_ms: int, representation: str, m
     else:
         load_images = False
 
+    preprocess_config = [
+        {
+            "preprocessing_type": "CenterCrop",
+            "height": 320,
+            "width": 640,
+        }
+    ]
+    augmentator = fetch_preprocessing(preprocess_config)
+
     dataset = DsecSequence(
         sequence_path=sequence_path,
         event_representation=rep,
         time_window_ms=time_window_ms,
-        augmentator=None,
+        augmentator=augmentator,
         load_images=load_images,
         overfit=False,
         sequence_window=1,
@@ -236,8 +251,14 @@ def evaluate_sequence(
         # Use RGB input for dav2_rgb model
         if dataset.load_images and representation == "rgb":
             events = sample["rgb"][0].unsqueeze(0).to(device)
-            # resize to 480x640
-            events = torch.nn.functional.interpolate(events, size=(480, 640), mode='bilinear', align_corners=False)
+            target_hw = target_depth_t.shape[-2:]
+            if events.shape[-2:] != target_hw:
+                events = torch.nn.functional.interpolate(
+                    events,
+                    size=target_hw,
+                    mode="bilinear",
+                    align_corners=False,
+                )
         
         pred_depth = model(events)  # (1,1,H,W) or (depth, composite)
 
@@ -245,8 +266,9 @@ def evaluate_sequence(
         if isinstance(pred_depth, tuple):
             pred_depth = pred_depth[0]
 
-        pred_depth = 1.0 / (pred_depth + 1)  # convert to depth 
-        pred_depth = torch.clamp(pred_depth, 0, 80.0)
+        if model_name in ("e2vid_dav2", "etnet_dav2", "dav2_rgb", "dav2", "dav2_composite"):
+            pred_depth = 1.0 / (pred_depth + 1)  # convert to depth
+            pred_depth = torch.clamp(pred_depth, 0, 80.0)
     
         pred_depth = pred_depth.squeeze(1)  # (1,H,W)
         pred_np_raw = pred_depth.detach().cpu().squeeze().numpy()
@@ -351,6 +373,7 @@ def main() -> None:
             checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
             device=device,
             input_size=518,
+            rgb=(args.representation.lower() == "rgb"),
         )
     elif args.model == "e2vid_dav2":
         model = E2VIDDav2(

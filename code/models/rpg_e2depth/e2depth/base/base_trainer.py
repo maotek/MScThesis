@@ -5,7 +5,7 @@ import logging
 import torch
 import torch.optim as optim
 from utils.path_utils import ensure_dir
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 import atexit
 
 
@@ -53,14 +53,15 @@ class BaseTrainer:
 
         self.tensorboard_logdir = os.path.join(self.checkpoint_dir, 'tensorboard')
         ensure_dir(self.tensorboard_logdir)
-        self.writer = SummaryWriter(log_dir=self.tensorboard_logdir)
+        # self.writer = SummaryWriter(log_dir=self.tensorboard_logdir)
         atexit.register(self.cleanup)
 
         if resume:
             self._resume_checkpoint(resume)
 
     def cleanup(self):
-        self.writer.close()
+        # self.writer.close()
+        pass
 
     def train(self):
         """
@@ -70,20 +71,20 @@ class BaseTrainer:
             result = self._train_epoch(epoch)
 
             # Forward epoch results to Tensorboard logger
-            for key, value in result.items():
-                if key == 'metrics':
-                    for i, metric in enumerate(self.metrics):
-                        self.writer.add_scalar(metric.__name__, result['metrics'][i], epoch)
-                elif key == 'val_metrics':
-                    for i, metric in enumerate(self.metrics):
-                        self.writer.add_scalar('val_' + metric.__name__, result['val_metrics'][i], epoch)
-                elif 'previews' in key:
-                    for i, preview in enumerate(value):
-                        self.writer.add_image('{}_{}'.format(key, i), preview, epoch)
-                elif key == 'losses' or key == 'val_losses':
-                    self.writer.add_scalars(key, value, epoch)
-                else:
-                    self.writer.add_scalar(key, value, epoch)
+            # for key, value in result.items():
+            #     if key == 'metrics':
+            #         for i, metric in enumerate(self.metrics):
+            #             self.writer.add_scalar(metric.__name__, result['metrics'][i], epoch)
+            #     elif key == 'val_metrics':
+            #         for i, metric in enumerate(self.metrics):
+            #             self.writer.add_scalar('val_' + metric.__name__, result['val_metrics'][i], epoch)
+            #     elif 'previews' in key:
+            #         for i, preview in enumerate(value):
+            #             self.writer.add_image('{}_{}'.format(key, i), preview, epoch)
+            #     elif key == 'losses' or key == 'val_losses':
+            #         self.writer.add_scalars(key, value, epoch)
+            #     else:
+            #         self.writer.add_scalar(key, value, epoch)
 
             # Write result to JSON logger
             log = {'epoch': epoch}

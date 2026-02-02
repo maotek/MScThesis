@@ -68,6 +68,8 @@ class E2VID(torch.nn.Module):
             events = events.unsqueeze(0)
         assert events.dim() == 4, "events must be (B,C,H,W)"
 
+        self.reset_state()
+
         events = events.to(self.device)
 
         # Handle recurrent model
@@ -75,6 +77,11 @@ class E2VID(torch.nn.Module):
 
         # For now, always pass None as states to avoid issues with state management
         result = self.model(events, None)
+
+        # if self.is_recurrent:
+        #     result = self.model(events, self._states)
+        # else:
+        #     result = self.model(events, None)
 
         if isinstance(result, tuple):
             pred, states = result

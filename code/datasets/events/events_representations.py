@@ -272,6 +272,15 @@ class E2vidVoxelGrid(EventRepresentation):
 
             voxel_grid = voxel_grid.view(self.channels, self.height, self.width)
 
+            # Normalize nonzero events to zero-mean/unit-std (matches E2VID preprocessing)
+            nonzero_ev = voxel_grid != 0
+            num_nonzeros = nonzero_ev.sum()
+            if num_nonzeros > 0:
+                mean = torch.sum(voxel_grid, dtype=torch.float32) / num_nonzeros
+                stddev = torch.sqrt(torch.sum(voxel_grid ** 2, dtype=torch.float32) / num_nonzeros - mean ** 2)
+                mask = nonzero_ev.type_as(voxel_grid)
+                voxel_grid = mask * (voxel_grid - mean) / stddev
+
         return voxel_grid
 
 

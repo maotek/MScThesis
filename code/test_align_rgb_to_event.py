@@ -12,9 +12,9 @@ def ensure_dir(path: str) -> str:
     return path
 
 def main():
-    sequence_path = "datasets/DSEC/data/validate/interlaken_00_c"  # Change as needed
+    sequence_path = "datasets/DSEC/data/validate/interlaken_00_g"  # Change as needed
     output_dir = ensure_dir("output/test_align_rgb_to_event")
-    idx = 0  # Change as needed
+    idx = 100  # Change as needed
 
     # Load sequence
     rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
@@ -37,13 +37,21 @@ def main():
     rgb_tensor = sample["rgb"][0]  # C, H, W in [0, 1]
     rgb_img = (rgb_tensor.permute(1, 2, 0).cpu().numpy() * 255.0).astype(np.uint8)
 
+    # Load original (unwarped) RGB directly from the folder
+    start_index = idx * dataset.sequence_step
+    raw_path = os.path.join(dataset.base_left_images_path, dataset.left_images[start_index])
+    raw_bgr = cv2.imread(raw_path)
+    if raw_bgr is None:
+        raise ValueError(f"Failed to load original RGB image: {raw_path}")
+    raw_rgb = cv2.cvtColor(raw_bgr, cv2.COLOR_BGR2RGB)
+
     # Load tencode image aligned to RGB timestamps (T, 3, H, W)
     tencode_tensor = sample["rgb_aligned_events"][0]
     tencode_img = rgb_to_uint8(tencode_tensor)
 
     # Save for visualization
     aligned_path = os.path.join(output_dir, f"{idx:05d}_aligned_rgb.png")
-    rgb_path = os.path.join(output_dir, f"{idx:05d}_rgb.png")
+    raw_path_out = os.path.join(output_dir, f"{idx:05d}_rgb_raw.png")
     tencode_path = os.path.join(output_dir, f"{idx:05d}_tencode.png")
     overlay_path = os.path.join(output_dir, f"{idx:05d}_rgb_tencode_overlay.png")
 
@@ -51,11 +59,11 @@ def main():
     overlay = cv2.addWeighted(rgb_img, 0.6, tencode_img, 0.4, 0.0)
 
     save_image(aligned_path, rgb_img)
-    save_image(rgb_path, rgb_img)
+    save_image(raw_path_out, raw_rgb)
     save_image(tencode_path, tencode_img)
     save_image(overlay_path, overlay)
     print(f"Saved aligned RGB to {aligned_path}")
-    print(f"Saved RGB to {rgb_path}")
+    print(f"Saved raw RGB to {raw_path_out}")
     print(f"Saved tencode to {tencode_path}")
     print(f"Saved overlay to {overlay_path}")
 

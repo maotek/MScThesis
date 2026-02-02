@@ -4,6 +4,12 @@ import sys
 
 import torch
 
+_E2DEPTH_ROOT = Path(__file__).resolve().parents[1] / "models" / "rpg_e2depth" / "e2depth"
+if str(_E2DEPTH_ROOT) not in sys.path:
+    sys.path.insert(0, str(_E2DEPTH_ROOT))
+
+from models.rpg_e2depth.e2depth.model.model import *
+
 
 def _default_device(device: Optional[torch.device]) -> torch.device:
     if device is not None:
@@ -37,14 +43,6 @@ class E2Depth(torch.nn.Module):
         else:
             self.weights_path = weights_path
 
-        # Add the e2depth directory to Python path to handle relative imports
-        e2depth_dir = Path(__file__).resolve().parents[1] / "models" / "rpg_e2depth" / "e2depth"
-        if str(e2depth_dir) not in sys.path:
-            sys.path.insert(0, str(e2depth_dir))
-        
-        # Now import the model module
-        from model.model import E2VID, E2VIDRecurrent
-
         # Load using the repo utility, forcing CPU to avoid CUDA dependency, then move to target device
         raw_model = torch.load(self.weights_path, map_location="cpu")
         arch = raw_model["arch"]
@@ -53,14 +51,7 @@ class E2Depth(torch.nn.Module):
         except KeyError:
             model_type = raw_model["config"]["model"]
 
-        # Instantiate the model
-        if arch == "E2VID":
-            model = E2VID(model_type)
-        elif arch == "E2VIDRecurrent":
-            model = E2VIDRecurrent(model_type)
-        else:
-            raise ValueError(f"Unknown architecture: {arch}")
-        
+        model = eval(arch)(model_type)
         model.load_state_dict(raw_model["state_dict"])
 
         self.model = model.to(self.device)
@@ -82,6 +73,8 @@ class E2Depth(torch.nn.Module):
         if events.dim() == 3:
             events = events.unsqueeze(0)
         assert events.dim() == 4, "events must be (B,C,H,W)"
+
+        self.reset_state()
 
         events = events.to(self.device)
 

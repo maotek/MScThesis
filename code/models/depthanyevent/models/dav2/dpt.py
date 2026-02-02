@@ -275,8 +275,6 @@ class DepthAnythingV2(nn.Module):
         if not isinstance(final_h, int):
             final_h = int(final_h)
 
-        #print(f"W: {final_w}; H: {final_h}")
-
         image = F.interpolate(raw_image, (final_h, final_w), mode='bicubic', align_corners=False)
         
         IMAGENET_MEAN = [0.485, 0.456, 0.406]
