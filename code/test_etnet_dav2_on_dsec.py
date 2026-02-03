@@ -169,7 +169,7 @@ def main() -> None:
         sequence_path=args.sequence,
         event_representation=rep,
         time_window_ms=args.time_window_ms,
-        event_window_method="between_frames",
+        # event_window_method="between_frames",
         augmentator=augmentator,
         load_images=True,
         overfit=False,
