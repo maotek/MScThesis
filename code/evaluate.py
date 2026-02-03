@@ -120,9 +120,9 @@ def make_representation(representation: str, model: str):
     representation = representation.lower()
     if representation == "tencode":
         if model == "dae":
-            return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
-        if model == "dav2":
             return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
+        if model == "dav2":
+            return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
     if representation == "rgb":
         return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
     if representation == "tencode_pixelcount":

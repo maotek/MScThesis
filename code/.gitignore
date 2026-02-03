@@ -28,4 +28,3 @@ datasets/DSEC/data
 **/**.ckpt
 **/**.npz
 **/**.zip
-output/
