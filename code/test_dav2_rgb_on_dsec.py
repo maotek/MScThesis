@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from networks.dav2_wrapper import Dav2
+from networks.dav2 import Dav2
 from datasets.events import Tencode
 from datasets.utils import fetch_preprocessing
 from evaluation import add_to_metrics, prepare_target_data_torch, prepare_target_data

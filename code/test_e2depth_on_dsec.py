@@ -1,7 +1,6 @@
 import argparse
 import os
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
@@ -11,7 +10,7 @@ import matplotlib.pyplot as plt
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events.events_representations import E2DepthVoxelGrid, VoxelGrid
-from networks.e2depth_wrapper import load_e2depth
+from networks.e2depth import load_e2depth
 from datasets.utils import fetch_preprocessing
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
@@ -42,12 +41,6 @@ def parse_args() -> argparse.Namespace:
         help="Optional E2Depth checkpoint path. Defaults to models/rpg_e2depth/pretrained/E2DEPTH_si_grad_loss_mixed.pth.tar",
     )
     parser.add_argument("--output-dir", type=str, default="output/test_e2depth_on_dsec", help="Where to save visualizations.")
-    parser.add_argument(
-        "--device",
-        type=str,
-        default=None,
-        help="Device override (cuda/mps/cpu). Defaults to auto-selection.",
-    )
     return parser.parse_args()
 
 
@@ -119,11 +112,7 @@ def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target
 @torch.no_grad()
 def main() -> None:
     args = parse_args()
-    device = (
-        torch.device(args.device)
-        if args.device is not None
-        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     rep = E2DepthVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
     preprocess_config = [

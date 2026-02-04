@@ -1,0 +1,38 @@
+{
+  "data_loader": {
+    "dataset": "dsec",
+    "datapath": "datasets/DSEC/data",
+    "split": "validation",
+    "concatenate_sequences": false,
+    "event_representation": {
+      "representation_type": "tencode",
+      "normalize": true,
+      "white_frame": false,
+      "height": 480,
+      "width": 640
+    },
+    "preprocessing": [
+      {
+        "preprocessing_type": "CenterCrop",
+        "height": 320,
+        "width": 640
+      }
+    ],
+    "load_images": true,
+    "batch_size": 1,
+    "num_workers": 1,
+    "pin_memory": true,
+    "shuffle": false,
+    "sequence_window": 1,
+    "sequence_step": 1,
+    "time_window_ms": 50
+  },
+  "model": {
+    "model_type": "dav2",
+    "input_size": 518
+  },
+  "vis_interval": 200,
+  "vis_dir": "output/evaluate_dav2_rgb",
+  "use_scaleshift": true,
+  "clip_distance": 80.0
+}

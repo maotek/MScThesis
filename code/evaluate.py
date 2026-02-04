@@ -1,18 +1,22 @@
 import argparse
+import json
 import os
+import random
 from pathlib import Path
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple
+
+from pprint import pprint
 
 import numpy as np
 import torch
 import tqdm
 
 from datasets.events.events_representations import E2vidVoxelGrid
-from networks.dae_wrapper import DAE
+from networks.dae import DAE
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
-from datasets.DSEC.sbt.dsec_sequence import DsecSequence
+from datasets.DSEC.dsec_dataset import fetch_dataloader as fetch_dsec_dataloader
 from datasets.events import Tencode, TencodePixelCount, VoxelGrid, ETNetVoxelGrid
-from networks.dav2_wrapper import Dav2
+from networks.dav2 import Dav2
 from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from networks.etnet_dav2 import ETNetDav2
@@ -21,7 +25,6 @@ from evaluation import (
     prepare_target_data,
     prepare_target_data_torch,
 )
-from datasets.utils import fetch_preprocessing
 from losses import normalized_depth_scale_and_shift
 from util import (
     depth_to_colormap,
@@ -35,150 +38,54 @@ from util import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate DAV2 on DSEC validation sequences.")
     parser.add_argument(
-        "--dsec-root",
-        type=str,
-        default="datasets/DSEC/data/validate",
-        help="Root folder containing DSEC validation sequences",
-    )
-    parser.add_argument(
-        "--sequences",
-        type=str,
-        nargs="*",
-        default=None,
-        help="Specific sequence names to evaluate; if omitted, auto-detects subfolders in dsec-root.",
-    )
-    parser.add_argument(
-        "--time-window-ms",
+        "--seed",
         type=int,
-        default=50,
-        help="Event window size for tencode.",
+        default=42,
+        help="Random seed (same default as models/depthanyevent/test.py).",
     )
     parser.add_argument(
-        "--representation",
+        "--config-path",
+        required=True,
         type=str,
-        choices=("tencode", "tencode_pixelcount", "voxelgrid", "rgb"),
-        default="tencode",
-        help="Event representation to use (tencode, tencode_pixelcount, voxelgrid, rgb).",
-    )
-    parser.add_argument(
-        "--model",
-        type=str,
-        choices=("dav2", "e2vid_dav2", "e2vid_dav2_composite", "dae", "etnet_dav2"),
-        default="dav2",
-        help="Model type: dav2, e2vid_dav2 (E2VID->DAV2 depth), e2vid_dav2_composite (E2VID composite RGB -> DAV2 depth), dae (DepthAnyEvent), etnet_dav2 (ET-Net->DAV2 depth).",
-    )
-    parser.add_argument(
-        "--clip-distance",
-        type=float,
-        default=80.0,
-        help="Max depth value for metrics.",
-    )
-    parser.add_argument(
-        "--use-scaleshift",
-        action="store_true",
-        default=True,
-        help="Apply scale+shift alignment.",
+        default=None,
+        help="Optional JSON config path; if provided, overrides other args except --csv-path.",
     )
     parser.add_argument(
         "--csv-path",
+        required=True,
         type=str,
         default=None,
-        help="Optional CSV file to save metrics; defaults to output/evaluate_<model>_<rep>.csv",
-    )
-    parser.add_argument(
-        "--erase-csv",
-        action="store_true",
-        default=False,
-        help="Remove existing CSV before writing.",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default=None,
-        help="Device string (cuda, mps, cpu). Auto-selects if not provided.",
-    )
-    parser.add_argument(
-        "--vis-interval",
-        type=int,
-        default=200,
-        help="If >0, save visualization every N frames per sequence.",
+        help="Optional CSV output path for metrics.",
     )
     return parser.parse_args()
 
 
-def select_device(device_str: Optional[str]) -> torch.device:
-    if device_str is not None:
-        return torch.device(device_str)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
+def load_config(config_path: str) -> Tuple[Dict[str, object], Dict[str, object]]:
+    """Load config JSON and split into data_loader_config and model_config."""
+    with open(config_path, "r") as f:
+        config = json.load(f)
+
+    if "data_loader" not in config or "model" not in config:
+        raise KeyError("Config must contain top-level 'data_loader' and 'model'")
+
+    data_loader_config = dict(config["data_loader"])
+    model_config = dict(config["model"])
+    config = {k: v for k, v in config.items() if k not in ("data_loader", "model")}
+
+    return data_loader_config, model_config, config
 
 
-def make_representation(representation: str, model: str):
-    representation = representation.lower()
-    if representation == "tencode":
-        if model == "dae":
-            return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
-        if model == "dav2":
-            return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
-    if representation == "rgb":
-        return Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
-    if representation == "tencode_pixelcount":
-        return TencodePixelCount(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=False)
-    if representation == "voxelgrid":
-        if model == "e2vid_dav2":
-            return E2vidVoxelGrid(channels=5, height=DSEC_HEIGHT, width=DSEC_WIDTH)
-        if model == "etnet_dav2":
-            return ETNetVoxelGrid(channels=5, height=DSEC_HEIGHT, width=DSEC_WIDTH)
-        return VoxelGrid(channels=5, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
-    raise ValueError(f"Unsupported representation: {representation}")
+def setup_device_and_seeds(args: argparse.Namespace) -> torch.device:
+    """DepthAnyEvent-style seed init with default seed=42."""
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
 
-
-def make_dataset(sequence_path: str, time_window_ms: int, representation: str, model: str) -> DsecSequence:
-    rep = make_representation(representation, model)
-    model = model.lower()
-    representation = representation.lower()
-
-    if representation == "rgb":
-        load_images = True
-    else:
-        load_images = False
-
-    preprocess_config = [
-        {
-            "preprocessing_type": "CenterCrop",
-            "height": 320,
-            "width": 640,
-        }
-    ]
-    augmentator = fetch_preprocessing(preprocess_config)
-
-    dataset = DsecSequence(
-        sequence_path=sequence_path,
-        event_representation=rep,
-        time_window_ms=time_window_ms,
-        augmentator=augmentator,
-        load_images=load_images,
-        overfit=False,
-        sequence_window=1,
-        sequence_step=1,
-        split="validation",
-        self_supervised=False,
-        postfix="",
-    )
-    return dataset
-
-
-def list_sequences(dsec_root: str) -> Tuple[str, ...]:
-    if not os.path.isdir(dsec_root):
-        raise FileNotFoundError(f"DSEC root not found: {dsec_root}")
-    seqs = [name for name in os.listdir(dsec_root) if os.path.isdir(os.path.join(dsec_root, name))]
-    seqs.sort()
-    if not seqs:
-        raise FileNotFoundError(f"No sequences found under {dsec_root}")
-    return tuple(seqs)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps") # testing
+    if device.type == "cuda":
+        torch.cuda.manual_seed(args.seed)
+    return device
 
 
 def write_csv(path: str, seq_results: list, mean_metrics: Dict[str, float]) -> None:
@@ -223,10 +130,9 @@ def save_visualization(
 
 def evaluate_sequence(
     seq_name: str,
-    dsec_root: str,
+    data_loader: torch.utils.data.DataLoader,
     model: object,
     device: torch.device,
-    time_window_ms: int,
     clip_distance: float,
     use_scaleshift: bool,
     representation: str,
@@ -234,23 +140,21 @@ def evaluate_sequence(
     vis_interval: int,
     vis_dir: str,
 ) -> Tuple[Dict[str, float], int]:
-    sequence_path = os.path.join(dsec_root, seq_name)
-    if not os.path.isdir(sequence_path):
-        raise FileNotFoundError(f"Sequence folder not found: {sequence_path}")
-    dataset = make_dataset(sequence_path, time_window_ms, representation, model_name)
+    
+    model.eval()
+    load_images = getattr(data_loader.dataset, "load_images", False)
 
     metrics_sum: Dict[str, float] = {}
-    num_frames = len(dataset)
+    num_frames = len(data_loader)
 
-    for idx in tqdm.tqdm(range(num_frames), desc=f"{seq_name}", leave=False):
-        sample = dataset[idx]
-
-        target_depth_t = sample["depth"][0].to(device)  # (1,H,W)
-        events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
+    for idx, sample in enumerate(tqdm.tqdm(data_loader, total=num_frames, desc=f"{seq_name}", leave=False)):
+        # sample: dict with shapes [B, T, C, H, W], B=1 and T=1 for our settings.
+        target_depth_t = sample["depth"][:, 0, 0].to(device)  # (B,H,W)
+        events = sample["depth_aligned_events"][:, 0].to(device)  # (B,C,H,W)
 
         # Use RGB input for dav2_rgb model
-        if dataset.load_images and representation == "rgb":
-            events = sample["rgb"][0].unsqueeze(0).to(device)
+        if load_images and representation == "rgb":
+            events = sample["rgb"][:, 0].to(device)
             target_hw = target_depth_t.shape[-2:]
             if events.shape[-2:] != target_hw:
                 events = torch.nn.functional.interpolate(
@@ -260,11 +164,7 @@ def evaluate_sequence(
                     align_corners=False,
                 )
         
-        pred_depth = model(events)  # (1,1,H,W) or (depth, composite)
-
-        # e2vid_dav2_composite returns tuple (depth, composite)
-        if isinstance(pred_depth, tuple):
-            pred_depth = pred_depth[0]
+        pred_depth = model(events)  # (1,1,H,W)
 
         if model_name in ("e2vid_dav2", "etnet_dav2", "dav2_rgb", "dav2", "dav2_composite"):
             pred_depth = 1.0 / (pred_depth + 1)  # convert to depth
@@ -333,100 +233,96 @@ def accumulate_metrics(target: Dict[str, float], source: Dict[str, float]) -> Di
     return target
 
 
-def main() -> None:
-    args = parse_args()
-    device = select_device(args.device)
 
-    # Default CSV path incorporates model and representation for clarity
-    if args.csv_path is None:
-        args.csv_path = os.path.join("output", f"evaluate_{args.model}_{args.representation}.csv")
+def fetch_model(model_config: Dict[str, object], device: torch.device, representation: str = "") -> object:
+    model_name = str(model_config["model_type"])
 
-    # Visualization directory always follows the CSV stem inside /output
-    vis_dir = os.path.join("output", Path(args.csv_path).stem)
-
-    print(f"Evaluation using representation: {args.representation}, model: {args.model}, output CSV: {args.csv_path}, device: {device}")
-
-    # Enforce allowed representations per model to avoid downstream shape/compatibility errors
-    allowed_reps = {
-        "dav2": ("tencode", "tencode_pixelcount", "rgb"),
-        "e2vid_dav2": ("voxelgrid",),
-        "e2vid_dav2_composite": ("voxelgrid",),
-        "dae": ("tencode", "tencode_pixelcount"),
-        "etnet_dav2": ("voxelgrid",),
-    }
-
-    # Check representation compatibility
-    model_key = args.model.lower()
-    rep_key = args.representation.lower()
-    if model_key not in allowed_reps:
-        raise ValueError(f"Unsupported model: {args.model}")
-    if rep_key not in allowed_reps[model_key]:
-        allowed = ", ".join(allowed_reps[model_key])
-        raise ValueError(f"Model {args.model} does not support representation={args.representation}. Supported: {allowed}")
-
-    if args.csv_path and args.erase_csv and os.path.exists(args.csv_path):
-        os.remove(args.csv_path)
-
-    if args.model == "dav2":
-        model = Dav2(
-            encoder="vits",
-            checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
+    if model_name == "dav2":
+        return Dav2(
+            encoder=str(model_config.get("encoder", "vits")),
+            checkpoint=model_config.get("checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
             device=device,
-            input_size=518,
-            rgb=(args.representation.lower() == "rgb"),
+            input_size=int(model_config.get("input_size", 518)),
+            rgb=(representation.lower() == "rgb"),
         )
-    elif args.model == "e2vid_dav2":
-        model = E2VIDDav2(
-            e2vid_weights=None,
-            dav2_encoder="vits",
-            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
+    elif model_name == "e2vid_dav2":
+        return E2VIDDav2(
+            e2vid_weights=model_config.get("e2vid_weights", os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar")),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
             device=device,
         )
-    elif args.model == "e2vid_dav2_composite":
-        model = E2VIDDav2Composite(
-            e2vid_weights=None,
-            dav2_encoder="vits",
-            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
+    elif model_name == "e2vid_dav2_composite":
+        return E2VIDDav2Composite(
+            e2vid_weights=model_config.get("e2vid_weights", os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar")),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
             device=device,
         )
-    elif args.model == "dae":
-        model = DAE(
-            checkpoint=os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth"),
+    elif model_name == "dae":
+        return DAE(
+            checkpoint=model_config.get("checkpoint", os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth")),
+            input_size=int(model_config.get("input_size", 518)),
+            inv_prediction=bool(model_config.get("inv_prediction", True)),
+            activation=str(model_config.get("activation", "relu")),
+            scale_factor=float(model_config.get("scale_factor", 1.0)),
             device=device,
-            input_size=518,
-            inv_prediction=True,
-            activation="relu",
-            scale_factor=1.0,
         )
-    elif args.model == "etnet_dav2":
-        model = ETNetDav2(
-            etnet_checkpoint=os.path.join("models", "etnet", "checkpoints", "etnet.pth"),
-            dav2_encoder="vits",
-            dav2_checkpoint=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
+    elif model_name == "etnet_dav2":
+        return ETNetDav2(
+            etnet_checkpoint=model_config.get("etnet_checkpoint", os.path.join("models", "etnet", "checkpoints", "etnet.pth")),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
             device=device,
         )
     else:
-        print(args.model)
-        raise ValueError(f"Unsupported model: {args.model}")
+        print(model_name)
+        raise ValueError(f"Unsupported model: {model_name}")
+
+
+
+def main() -> None:
+    args = parse_args()
+
+    # Setting up device and seeds
+    print("Setting up device and seeds...")
+    device = setup_device_and_seeds(args)
+
+    # Ensure CSV_path directory exists
+    print("Preparing CSV output directory...")
+    if args.csv_path:
+        csv_dir = os.path.dirname(os.path.abspath(args.csv_path))
+        os.makedirs(csv_dir, exist_ok=True)
+
+    # Reading config
+    print("Loading configuration...")
+    data_loader_config, model_config, config = load_config(args.config_path)
+
+    # Ensure visualization directory exists
+    if "vis_interval" in config and config["vis_interval"] > 0:
+        vis_dir = config.get("vis_dir", "visualizations")
+        os.makedirs(vis_dir, exist_ok=True)
+
+    representation = data_loader_config.get("event_representation", {}).get("representation_type", "")
+
+    model = fetch_model(model_config, device, representation=representation)
 
     overall_sum: Dict[str, float] = {}
     overall_frames = 0
     seq_results = []
+    data_loaders_dict = fetch_dsec_dataloader(data_loader_config, test=True)
 
-    seq_list = args.sequences if args.sequences is not None else list_sequences(args.dsec_root)
-
-    for seq_name in seq_list:
+    for seq_name, data_loader in data_loaders_dict.items():
         metrics_sum, frames = evaluate_sequence(
             seq_name=seq_name,
-            dsec_root=args.dsec_root,
+            data_loader=data_loader,
             model=model,
             device=device,
-            time_window_ms=args.time_window_ms,
-            clip_distance=args.clip_distance,
-            use_scaleshift=args.use_scaleshift,
-            representation=args.representation,
-            model_name=args.model,
-            vis_interval=args.vis_interval,
+            clip_distance=config.get("clip_distance", 80.0),
+            use_scaleshift=config.get("use_scaleshift", True),
+            representation=representation,
+            model_name=model_config["model_type"],
+            vis_interval=config.get("vis_interval", 0),
             vis_dir=vis_dir,
         )
 
@@ -449,6 +345,8 @@ def main() -> None:
 
         if args.csv_path:
             write_csv(args.csv_path, seq_results, overall_avg)
+
+
 
 
 if __name__ == "__main__":

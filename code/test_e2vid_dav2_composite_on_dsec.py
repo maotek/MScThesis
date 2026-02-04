@@ -71,12 +71,6 @@ def parse_args() -> argparse.Namespace:
         default=80.0,
         help="Max depth value (meters) for visualization clipping.",
     )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default=None,
-        help="Device override (cuda/mps/cpu). Defaults to auto-selection.",
-    )
     return parser.parse_args()
 
 
@@ -158,11 +152,7 @@ def visualize(
 @torch.no_grad()
 def main() -> None:
     args = parse_args()
-    device = (
-        torch.device(args.device)
-        if args.device is not None
-        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     rep = E2vidVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
     preprocess_config = [

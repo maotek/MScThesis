@@ -13,7 +13,7 @@ from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events import Tencode, TencodePixelCount
 from datasets.utils import fetch_preprocessing
-from networks.dav2_wrapper import Dav2
+from networks.dav2 import Dav2
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
 import matplotlib.pyplot as plt
@@ -125,13 +125,7 @@ def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target
 @torch.no_grad()
 def main() -> None:
     args = parse_args()
-    device = torch.device(
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
     preprocess_config = [

@@ -119,7 +119,6 @@ class DsecSequence(Dataset):
         overfit: bool = False,
         sequence_window: int = 1,
         sequence_step: int = 1,
-        split: str = "train",
         self_supervised: bool = False,
         postfix: str = "",
     ):
@@ -130,8 +129,6 @@ class DsecSequence(Dataset):
         self.self_supervised = self_supervised
         self.postfix = postfix
         self.event_window_method = event_window_method
-
-        print("Self-supervised mode:", self.self_supervised)
 
         # Validate and set sequence parameters
         if sequence_window < 1:
@@ -182,8 +179,6 @@ class DsecSequence(Dataset):
         disparity_timestamp_path = os.path.join(sequence_path, "disparity_timestamps.txt")
         # Skip the first timestamp to match disparity file count
         self.timestamps_disparity = np.loadtxt(disparity_timestamp_path, dtype="int64")[1:]
-
-        print(f"Loaded {len(self.timestamps_disparity)} disparity timestamps.")
 
         # Load RGB timestamps
         rgb_timestamp_path = os.path.join(sequence_path, "image_timestamps.txt")
@@ -301,12 +296,13 @@ class DsecSequence(Dataset):
                     )
 
     def _load_event_data(self, sequence_path: str) -> None:
-        """Load event data files and rectification maps."""
-        # Load event files (currently only left camera supported)
+        """Load event metadata and initialize event file access."""
+        # Keep only paths in parent process; open h5 lazily in each worker.
         event_left_dir = os.path.join(sequence_path, f"{Path(sequence_path).name}_events_left")
-        event_file = {
-            "left": h5py.File(os.path.join(event_left_dir, "events.h5"), "r"),
-        }
+        self._event_left_h5_path = os.path.join(event_left_dir, "events.h5")
+        self._h5_event_files = {}
+        self.event_slicer = {}
+        self._finalizer = None
 
         # Load rectification maps for event cameras
         self.rectify_event_maps = {}
@@ -318,13 +314,34 @@ class DsecSequence(Dataset):
                 # Convert HDF5 dataset to numpy array
                 self.rectify_event_maps[stereo] = np.array(rectify_data)
 
-        # Create event slicers for efficient temporal access
-        self.event_slicer = {
-            "left": EventSlicer(event_file["left"]),
-        }
-        
-        # Ensure proper cleanup of HDF5 files
-        self._finalizer = weakref.finalize(self, self.close_callback, event_file)
+        self._ensure_event_slicer()
+
+    def _ensure_event_slicer(self) -> None:
+        """Open event HDF5 files lazily in the current process/worker."""
+        if "left" in self.event_slicer:
+            return
+
+        event_file = h5py.File(self._event_left_h5_path, "r")
+        self._h5_event_files = {"left": event_file}
+        self.event_slicer = {"left": EventSlicer(event_file)}
+        self._finalizer = weakref.finalize(self, self.close_callback, self._h5_event_files)
+
+    def _close_event_files(self) -> None:
+        """Close open HDF5 handles and clear references."""
+        if getattr(self, "_finalizer", None) is not None and self._finalizer.alive:
+            self._finalizer()
+        self._h5_event_files = {}
+        self.event_slicer = {}
+        self._finalizer = None
+
+    def __getstate__(self):
+        """Drop non-pickleable h5py handles before worker spawn pickling."""
+        self._close_event_files()
+        return self.__dict__.copy()
+
+    def __setstate__(self, state):
+        """Restore pickled dataset state."""
+        self.__dict__.update(state)
 
     def _load_calibration(self, sequence_path: str) -> None:
         """Load camera calibration parameters from YAML file."""
@@ -580,6 +597,8 @@ class DsecSequence(Dataset):
                 - rgb_aligned_events: Event representations aligned to RGB [T, C, H, W] (if load_images=True)
                 - rgb: RGB images tensor [T, C, H, W] (if load_images=True)
         """
+        self._ensure_event_slicer()
+
         # Calculate sequence bounds
         start_index = index * self.sequence_step
         end_index = start_index + self.sequence_window

@@ -1,0 +1,22 @@
+{
+    "name": "DAv2 Train 0",
+    "cuda": true,
+    "gpu": 0,
+    "trainer": {
+        "clip_distance": 80.0,
+        "reg_factor": 3.70378,
+        "use_logdepth": false,
+        "use_scaleshift": true
+    },
+    "model": {
+        "model_type": "DAv2",
+        "encoder": "vits",
+        "activation": "relu",
+        "scale_factor": 1.0,
+        "inv_prediction": true,
+        "input_size_width": 350,
+        "input_size_height": 266,
+        "freeze_encoder": false,
+        "input_channels": 3
+    }
+}

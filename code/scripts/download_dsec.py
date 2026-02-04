@@ -233,7 +233,7 @@ def make_jobs(seqs: Iterable[str]) -> list[Job]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=str, default="./DSEC_train")
+    ap.add_argument("--out", type=str, default="datasets/DSEC/data/test")
     ap.add_argument("--no-extract", action="store_true")
     ap.add_argument("--keep-zips", action="store_true")
     ap.add_argument("--seq", action="append", default=None)

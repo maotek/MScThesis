@@ -1,7 +1,6 @@
 import argparse
 import os
 from pathlib import Path
-from typing import Optional
 
 import torch
 
@@ -37,12 +36,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--use-minmax-norm", action="store_true", help="Apply ET-Net's optional min-max normalization to outputs.")
     parser.add_argument("--output-dir", type=str, default="output/test_etnet_on_dsec", help="Where to save visualizations.")
-    parser.add_argument(
-        "--device",
-        type=str,
-        default=None,
-        help="Device override (cuda/mps/cpu). Defaults to auto-selection.",
-    )
     return parser.parse_args()
 
 
@@ -60,11 +53,7 @@ def visualize(events_voxel: torch.Tensor, recon: torch.Tensor, out_dir: str, idx
 @torch.no_grad()
 def main() -> None:
     args = parse_args()
-    device = (
-        torch.device(args.device)
-        if args.device is not None
-        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     rep = ETNetVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
     # rep = ETNetVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)

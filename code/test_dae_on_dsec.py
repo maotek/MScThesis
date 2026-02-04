@@ -11,7 +11,7 @@ from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events import Tencode
 from datasets.utils import fetch_preprocessing
-from networks.dae_wrapper import DAE
+from networks.dae import DAE
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
 from util import depth_to_colormap, rgb_to_uint8, save_image, save_rgb, save_depth_colormap_with_cbar

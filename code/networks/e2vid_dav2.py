@@ -2,8 +2,8 @@ from typing import Optional
 
 import torch
 
-from networks.e2vid_wrapper import E2VID
-from networks.dav2_wrapper import Dav2
+from networks.e2vid import E2VID
+from networks.dav2 import Dav2
 
 
 class E2VIDDav2(torch.nn.Module):
@@ -15,26 +15,16 @@ class E2VIDDav2(torch.nn.Module):
 
     def __init__(
         self,
-        e2vid_weights: Optional[str] = None,
+        e2vid_weights: str = None,
         dav2_encoder: str = "vits",
-        dav2_checkpoint: Optional[str] = None,
-        device: Optional[torch.device] = None,
+        dav2_checkpoint: str = None,
+        device: torch.device = None,
     ) -> None:
         super().__init__()
-        self.device = self._select_device(device)
+        self.device = device
         self.e2vid = E2VID(weights_path=e2vid_weights, device=self.device)
         self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
         self.to(self.device)
-
-    @staticmethod
-    def _select_device(device: Optional[torch.device]) -> torch.device:
-        if device is not None:
-            return device
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        if torch.backends.mps.is_available():
-            return torch.device("mps")
-        return torch.device("cpu")
 
     def reset_state(self) -> None:
         self.e2vid.reset_state()

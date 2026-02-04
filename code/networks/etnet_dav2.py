@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 
 from networks.etnet import ETNet
-from networks.dav2_wrapper import Dav2
+from networks.dav2 import Dav2
 
 
 class ETNetDav2(torch.nn.Module):
@@ -15,14 +15,14 @@ class ETNetDav2(torch.nn.Module):
 
     def __init__(
         self,
-        etnet_checkpoint: Optional[str] = None,
+        etnet_checkpoint: str = None,
         dav2_encoder: str = "vits",
-        dav2_checkpoint: Optional[str] = None,
-        device: Optional[torch.device] = None,
+        dav2_checkpoint: str = None,
+        device: torch.device = None,
         use_minmax_norm: bool = True,
     ) -> None:
         super().__init__()
-        self.device = self._select_device(device)
+        self.device = device
         self.etnet = ETNet(
             checkpoint_path=etnet_checkpoint,
             device=self.device,
@@ -30,16 +30,6 @@ class ETNetDav2(torch.nn.Module):
         )
         self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
         self.to(self.device)
-
-    @staticmethod
-    def _select_device(device: Optional[torch.device]) -> torch.device:
-        if device is not None:
-            return device
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        if torch.backends.mps.is_available():
-            return torch.device("mps")
-        return torch.device("cpu")
 
     def reset_state(self) -> None:
         self.etnet.reset_state()

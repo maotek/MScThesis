@@ -1,7 +1,6 @@
 import argparse
 import os
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
@@ -9,7 +8,7 @@ import torch
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events.events_representations import VoxelGrid, E2vidVoxelGrid
-from networks.e2vid_wrapper import load_e2vid
+from networks.e2vid import load_e2vid
 from util import save_grayscale, save_voxelgrid
 
 
@@ -37,12 +36,6 @@ def parse_args() -> argparse.Namespace:
         help="Optional E2VID checkpoint path. Defaults to models/rpg_e2vid/pretrained/E2VID_lightweight.pth.tar",
     )
     parser.add_argument("--output-dir", type=str, default="output/test_e2vid_on_dsec", help="Where to save visualizations.")
-    parser.add_argument(
-        "--device",
-        type=str,
-        default=None,
-        help="Device override (cuda/mps/cpu). Defaults to auto-selection.",
-    )
     return parser.parse_args()
 
 
@@ -59,11 +52,7 @@ def visualize(events_voxel: torch.Tensor, recon: torch.Tensor, out_dir: str, idx
 @torch.no_grad()
 def main() -> None:
     args = parse_args()
-    device = (
-        torch.device(args.device)
-        if args.device is not None
-        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     rep = E2vidVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
     dataset = DsecSequence(
