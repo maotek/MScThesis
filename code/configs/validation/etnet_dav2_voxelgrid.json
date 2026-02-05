@@ -27,7 +27,9 @@
     "time_window_ms": 50
   },
   "model": {
-    "model_type": "etnet_dav2"
+    "model_type": "etnet_dav2",
+    "input_size_width": 350,
+    "input_size_height": 266
   },
   "vis_interval": 200,
   "vis_dir": "output/evaluate_etnet_dav2_voxelgrid",

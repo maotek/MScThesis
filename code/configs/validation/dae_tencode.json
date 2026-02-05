@@ -32,7 +32,11 @@
     "activation": "relu",
     "inv_prediction": true,
     "scale_factor": 1.0,
-    "intput_size": 518
+    "input_size_width": 350,
+    "input_size_height": 266,
+    "input_channels": 3,
+    "freeze_encoder": false,
+    "nopretrain": false
   },
   "vis_interval": 200,
   "vis_dir": "output/evaluate_dae_tencode",

@@ -5,7 +5,7 @@
     "split": "validation",
     "concatenate_sequences": false,
     "event_representation": {
-      "representation_type": "tencode",
+      "representation_type": "rgb",
       "normalize": true,
       "white_frame": false,
       "height": 480,
@@ -29,7 +29,8 @@
   },
   "model": {
     "model_type": "dav2",
-    "input_size": 518
+    "input_size_width": 350,
+    "input_size_height": 266
   },
   "vis_interval": 200,
   "vis_dir": "output/evaluate_dav2_rgb",
