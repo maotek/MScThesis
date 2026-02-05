@@ -164,15 +164,12 @@ def evaluate_sequence(
                     align_corners=False,
                 )
         
-        pred_depth = model(events)  # (1,1,H,W)
-
+        pred_depth = model(events)  # (1,1,320,640)
+        
         if model_name in ("e2vid_dav2", "etnet_dav2", "dav2_rgb", "dav2", "dav2_composite"):
-            pred_depth = 1.0 / (pred_depth + 1)  # convert to depth
-            pred_depth = torch.clamp(pred_depth, 0, 80.0)
+            pred_depth = 1.0 / (pred_depth + 1)  # convert to depth in ~meters
     
-        pred_depth = pred_depth.squeeze(1)  # (1,H,W)
-        pred_np_raw = pred_depth.detach().cpu().squeeze().numpy()
-
+        pred_depth = pred_depth.squeeze(1)  # (1,320,640)
         target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
 
         # Apply scale-shift normalization to match ground truth
@@ -180,10 +177,10 @@ def evaluate_sequence(
             scale, shift = normalized_depth_scale_and_shift(
                 pred_depth, target_proc_t, target_proc_t > 0
             )
-            pred_depth = scale[:, None, None] * pred_depth + shift[:, None, None]
+            pred_depth = scale * pred_depth + shift
 
         pred_np = np.clip(pred_depth.detach().cpu().squeeze().numpy(), 0, clip_distance)
-        target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), clip_distance)
+        target_np = target_proc_t.detach().cpu().squeeze().numpy()
 
         mask = np.ones_like(target_np, dtype=bool)
 
@@ -205,7 +202,7 @@ def evaluate_sequence(
                 seq_name=seq_name,
                 idx=idx,
                 events=events,
-                pred_np=pred_np_raw,
+                pred_np=pred_depth.detach().cpu().squeeze().numpy(),
                 vis_dir=vis_dir,
             )
 
@@ -241,15 +238,18 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
         return Dav2(
             encoder=str(model_config.get("encoder", "vits")),
             checkpoint=model_config.get("checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
-            device=device,
-            input_size=int(model_config.get("input_size", 518)),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
             rgb=(representation.lower() == "rgb"),
+            device=device,
         )
     elif model_name == "e2vid_dav2":
         return E2VIDDav2(
             e2vid_weights=model_config.get("e2vid_weights", os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar")),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
             dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
             device=device,
         )
     elif model_name == "e2vid_dav2_composite":
@@ -257,15 +257,20 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             e2vid_weights=model_config.get("e2vid_weights", os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar")),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
             dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
             device=device,
         )
     elif model_name == "dae":
         return DAE(
             checkpoint=model_config.get("checkpoint", os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth")),
-            input_size=int(model_config.get("input_size", 518)),
+            input_channels=int(model_config.get("input_channels", 3)),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
             inv_prediction=bool(model_config.get("inv_prediction", True)),
             activation=str(model_config.get("activation", "relu")),
             scale_factor=float(model_config.get("scale_factor", 1.0)),
+            nopretrain=bool(model_config.get("nopretrain", False)),
             device=device,
         )
     elif model_name == "etnet_dav2":
@@ -273,6 +278,8 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             etnet_checkpoint=model_config.get("etnet_checkpoint", os.path.join("models", "etnet", "checkpoints", "etnet.pth")),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
             dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
             device=device,
         )
     else:
@@ -299,16 +306,15 @@ def main() -> None:
     data_loader_config, model_config, config = load_config(args.config_path)
 
     # Ensure visualization directory exists
-    if "vis_interval" in config and config["vis_interval"] > 0:
-        vis_dir = config.get("vis_dir", "visualizations")
+    vis_dir = config.get("vis_dir", "visualizations")
+    if config.get("vis_interval", 0) > 0:
         os.makedirs(vis_dir, exist_ok=True)
 
     representation = data_loader_config.get("event_representation", {}).get("representation_type", "")
 
     model = fetch_model(model_config, device, representation=representation)
 
-    overall_sum: Dict[str, float] = {}
-    overall_frames = 0
+    metrics_sequence_dict: Dict[str, Dict[str, float]] = {}
     seq_results = []
     data_loaders_dict = fetch_dsec_dataloader(data_loader_config, test=True)
 
@@ -326,20 +332,26 @@ def main() -> None:
             vis_dir=vis_dir,
         )
 
-        overall_sum = accumulate_metrics(overall_sum, metrics_sum)
-        overall_frames += frames
-
         seq_avg = {k: v / frames for k, v in metrics_sum.items()}
         print(f"\nSequence {seq_name} ({frames} frames):")
         for k in sorted(seq_avg.keys()):
             print(f"  {k}: {seq_avg[k]:.6f}")
 
+        metrics_sequence_dict[seq_name] = seq_avg
         seq_results.append({"name": seq_name, "frames": frames, "avg": seq_avg})
 
-    if overall_frames > 0:
-        overall_avg = {k: v / overall_frames for k, v in overall_sum.items()}
+    # Overall average metrics across sequences
+    metrics_mean: Dict[str, list] = {}
+    for seq in metrics_sequence_dict:
+        for k in metrics_sequence_dict[seq]:
+            if k not in metrics_mean:
+                metrics_mean[k] = []
+            metrics_mean[k].append(np.nanmean(np.array(metrics_sequence_dict[seq][k])))
+
+    if len(metrics_mean) > 0:
+        overall_avg = {k: float(np.nanmean(np.array(metrics_mean[k]))) for k in metrics_mean}
         print("\n================ Overall (validation) ===============")
-        print(f"Frames: {overall_frames}")
+        print(f"Sequences: {len(metrics_sequence_dict)}")
         for k in sorted(overall_avg.keys()):
             print(f"{k}: {overall_avg[k]:.6f}")
 
