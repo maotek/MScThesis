@@ -240,6 +240,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             checkpoint=model_config.get("checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
             input_size_width=int(model_config.get("input_size_width", 350)),
             input_size_height=int(model_config.get("input_size_height", 266)),
+            # If RGB representation, set rgb=True to apply ImageNet normalization.
             rgb=(representation.lower() == "rgb"),
             device=device,
         )
