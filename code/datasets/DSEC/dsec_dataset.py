@@ -40,7 +40,7 @@ def fetch_event_representation(config: Dict[str, Any]) -> EventRepresentation:
     height = config.get("height", DSEC_HEIGHT)
     width = config.get("width", DSEC_WIDTH)
 
-    if rep_type == "tencode":
+    if rep_type == "tencode" or rep_type == "rgb":
         return Tencode(
             height=height,
             width=width,
@@ -147,7 +147,7 @@ def fetch_dataloader(config_dataloader: Dict[str, Any], test: bool = False):
 
     datasplit = config_dataloader["split"]
     time_window_ms = config_dataloader.get("time_window_ms", 50)
-    
+
     batch_size = config_dataloader.get("batch_size", 1)
     num_workers = config_dataloader.get("num_workers", 1)
     load_images = config_dataloader.get("load_images", False)

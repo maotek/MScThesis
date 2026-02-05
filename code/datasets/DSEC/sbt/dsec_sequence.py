@@ -113,7 +113,6 @@ class DsecSequence(Dataset):
         sequence_path: str,
         event_representation: EventRepresentation,
         time_window_ms: int,
-        event_window_method: str = "fixed_window",
         augmentator: Optional[Augmentator] = None,
         load_images: bool = False,
         overfit: bool = False,
@@ -128,7 +127,6 @@ class DsecSequence(Dataset):
         self.augmentator = augmentator
         self.self_supervised = self_supervised
         self.postfix = postfix
-        self.event_window_method = event_window_method
 
         # Validate and set sequence parameters
         if sequence_window < 1:
@@ -265,35 +263,21 @@ class DsecSequence(Dataset):
 
     def _setup_event_windows(self, delta_t_us: int) -> None:
         """Setup event time windows for each timestamp."""
-        if self.event_window_method == "between_frames":
-            start_time = self.event_slicer["left"].get_start_time_us()
-            self.disparity_aligned_event_windows = []
-            prev = start_time
-            for timestamp in self.timestamps_disparity:
-                self.disparity_aligned_event_windows.append((prev, timestamp))
-                prev = timestamp
 
-            self.rgb_aligned_event_windows = []
-            if self.load_images:
-                prev = start_time
-                for timestamp in self.timestamps_rgb:
-                    self.rgb_aligned_event_windows.append((prev, timestamp))
-                    prev = timestamp
-        else:
-            # Create event windows aligned with disparity timestamps
-            self.disparity_aligned_event_windows = []
-            for timestamp in self.timestamps_disparity:
-                self.disparity_aligned_event_windows.append(
+        # Create event windows aligned with disparity timestamps
+        self.disparity_aligned_event_windows = []
+        for timestamp in self.timestamps_disparity:
+            self.disparity_aligned_event_windows.append(
+                (timestamp - delta_t_us, timestamp)
+            )
+            
+        # Create event windows aligned with RGB timestamps if needed
+        self.rgb_aligned_event_windows = []
+        if self.load_images:
+            for timestamp in self.timestamps_rgb:
+                self.rgb_aligned_event_windows.append(
                     (timestamp - delta_t_us, timestamp)
                 )
-                
-            # Create event windows aligned with RGB timestamps if needed
-            self.rgb_aligned_event_windows = []
-            if self.load_images:
-                for timestamp in self.timestamps_rgb:
-                    self.rgb_aligned_event_windows.append(
-                        (timestamp - delta_t_us, timestamp)
-                    )
 
     def _load_event_data(self, sequence_path: str) -> None:
         """Load event metadata and initialize event file access."""

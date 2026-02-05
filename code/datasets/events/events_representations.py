@@ -342,94 +342,94 @@ class Tencode(EventRepresentation):
         assert x.shape == y.shape == pol.shape == time.shape
         assert x.ndim == 1
 
-        # if self.white_frame:
-        #     tencode = torch.full((3, self.height, self.width), 255.0, dtype=torch.float, requires_grad=False)
-        # else:
-        #     tencode = torch.zeros((3, self.height, self.width), dtype=torch.float, requires_grad=False)
-
-        # if x.shape[0] == 0:
-        #     return tencode
-        # with (torch.no_grad()):
-        #     pol = pol.int() # Let's make the polarity an integer {0,1}
-
-        #     t_norm = time
-        #     t_norm = (t_norm-t_norm[0]) / (t_norm[-1]-t_norm[0])
-
-        #     index_red = (0 * self.width * self.height) + (y.long() * self.width) + x.long()
-        #     index_green = (1 * self.width * self.height) + (y.long() * self.width) + x.long()
-        #     index_blue = (2 * self.width * self.height) + (y.long() * self.width) + x.long()
-
-        #     mask_red = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_red >= 0) \
-        #         & (index_red < 3*self.height*self.width)
-        #     mask_green = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_green >= 0) \
-        #         & (index_green < 3*self.height*self.width)
-        #     mask_blue = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_blue >= 0) \
-        #         & (index_blue < 3*self.height*self.width)
-            
-        #     tencode.put_(index_red[mask_red], 255.0*pol[mask_red], accumulate=False)
-        #     tencode.put_(index_green[mask_green], 255.0*(1-t_norm[mask_green]), accumulate=False)
-        #     tencode.put_(index_blue[mask_blue], 255.0*(1-pol[mask_blue]), accumulate=False)
-        #     print(tencode.device)
-        #     print(x.sum(), y.sum(), pol.sum(), time.sum())
-        #     print(tencode.sum())
-
-        #     if self.normalize:
-        #         tencode = tencode / 255.0
-
-        H, W = self.height, self.width
-        device = x.device
-
-        # init output
         if self.white_frame:
-            tencode = torch.full((3, H, W), 255.0, device=device)
+            tencode = torch.full((3, self.height, self.width), 255.0, dtype=torch.float, requires_grad=False)
         else:
-            tencode = torch.zeros((3, H, W), device=device)
+            tencode = torch.zeros((3, self.height, self.width), dtype=torch.float, requires_grad=False)
 
-        if x.numel() == 0:
-            return tencode / 255.0 if self.normalize else tencode
+        if x.shape[0] == 0:
+            return tencode
+        with (torch.no_grad()):
+            pol = pol.int() # Let's make the polarity an integer {0,1}
 
-        with torch.no_grad():
-            x = x.long()
-            y = y.long()
-            pol = pol.int()
+            t_norm = time
+            t_norm = (t_norm-t_norm[0]) / (t_norm[-1]-t_norm[0])
 
-            # valid events
-            valid = (x >= 0) & (x < W) & (y >= 0) & (y < H)
-            x, y, pol, time = x[valid], y[valid], pol[valid], time[valid]
+            index_red = (0 * self.width * self.height) + (y.long() * self.width) + x.long()
+            index_green = (1 * self.width * self.height) + (y.long() * self.width) + x.long()
+            index_blue = (2 * self.width * self.height) + (y.long() * self.width) + x.long()
 
-            if x.numel() == 0:
-                return tencode / 255.0 if self.normalize else tencode
-
-            # normalize time
-            t_norm = (time - time[0]) / (time[-1] - time[0])
-
-            # pixel index
-            idx = y * W + x
-            HW = H * W
-
-            # store max time per pixel
-            max_time = torch.full((HW,), -1.0, device=device)
-            max_time.scatter_reduce_(0, idx, time, reduce="amax")
-
-            # keep only "last" events
-            keep = time == max_time[idx]
-
-            idx = idx[keep]
-            pol = pol[keep]
-            t_norm = t_norm[keep]
-
-            flat = tencode.view(3, -1)
-
-            flat[0, idx] = 255.0 * pol.float()
-            flat[1, idx] = 255.0 * (1.0 - t_norm)
-            flat[2, idx] = 255.0 * (1.0 - pol.float())
-
-            if self.normalize:
-                tencode /= 255.0
+            mask_red = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_red >= 0) \
+                & (index_red < 3*self.height*self.width)
+            mask_green = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_green >= 0) \
+                & (index_green < 3*self.height*self.width)
+            mask_blue = (x < self.width) & (x >= 0) & (y < self.height) & (y >= 0) & (index_blue >= 0) \
+                & (index_blue < 3*self.height*self.width)
             
+            tencode.put_(index_red[mask_red], 255.0*pol[mask_red], accumulate=False)
+            tencode.put_(index_green[mask_green], 255.0*(1-t_norm[mask_green]), accumulate=False)
+            tencode.put_(index_blue[mask_blue], 255.0*(1-pol[mask_blue]), accumulate=False)
             # print(tencode.device)
             # print(x.sum(), y.sum(), pol.sum(), time.sum())
             # print(tencode.sum())
+
+            if self.normalize:
+                tencode = tencode / 255.0
+
+        # H, W = self.height, self.width
+        # device = x.device
+
+        # # init output
+        # if self.white_frame:
+        #     tencode = torch.full((3, H, W), 255.0, device=device)
+        # else:
+        #     tencode = torch.zeros((3, H, W), device=device)
+
+        # if x.numel() == 0:
+        #     return tencode / 255.0 if self.normalize else tencode
+
+        # with torch.no_grad():
+        #     x = x.long()
+        #     y = y.long()
+        #     pol = pol.int()
+
+        #     # valid events
+        #     valid = (x >= 0) & (x < W) & (y >= 0) & (y < H)
+        #     x, y, pol, time = x[valid], y[valid], pol[valid], time[valid]
+
+        #     if x.numel() == 0:
+        #         return tencode / 255.0 if self.normalize else tencode
+
+        #     # normalize time
+        #     t_norm = (time - time[0]) / (time[-1] - time[0])
+
+        #     # pixel index
+        #     idx = y * W + x
+        #     HW = H * W
+
+        #     # store max time per pixel
+        #     max_time = torch.full((HW,), -1.0, device=device)
+        #     max_time.scatter_reduce_(0, idx, time, reduce="amax")
+
+        #     # keep only "last" events
+        #     keep = time == max_time[idx]
+
+        #     idx = idx[keep]
+        #     pol = pol[keep]
+        #     t_norm = t_norm[keep]
+
+        #     flat = tencode.view(3, -1)
+
+        #     flat[0, idx] = 255.0 * pol.float()
+        #     flat[1, idx] = 255.0 * (1.0 - t_norm)
+        #     flat[2, idx] = 255.0 * (1.0 - pol.float())
+
+        #     if self.normalize:
+        #         tencode /= 255.0
+            
+        #     # print(tencode.device)
+        #     # print(x.sum(), y.sum(), pol.sum(), time.sum())
+        #     # print(tencode.sum())
 
         return tencode
 
