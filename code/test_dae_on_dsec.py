@@ -24,7 +24,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint",
         type=str,
-        default=None,
+        default=os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth"),
         help="Optional checkpoint path. Defaults to models/depthanyevent/checkpoints/finetuned_dsec.pth",
     )
     parser.add_argument(
@@ -159,7 +159,6 @@ def main() -> None:
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="train",
         self_supervised=False,
         postfix="",
     )
@@ -171,28 +170,34 @@ def main() -> None:
         encoder=args.encoder,
         checkpoint=args.checkpoint,
         device=device,
-        input_size=518,
+        input_size_width=350,
+        input_size_height=266,
         activation="relu",
         scale_factor=1.0,
-        inv_prediction=True,
+        inv_prediction=False,
     )
 
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
     depth_pred = model(events)
 
-    # depth_pred = 1.0 / (depth_pred + 1e-6) # Convert from inverse depth to depth in meters
+    depth_pred = 1.0 / (depth_pred + 1e-6) # Convert from inverse depth to depth in meters
     # depth_pred = torch.clamp(depth_pred, 0.0, 80.0)
 
     # Apply scale-shift normalization to match ground truth
     target_depth_t = sample["depth"][0].to(device)
+
     target_proc_t = prepare_target_data_torch(target_depth_t, 80.0)
+
     scale, shift = normalized_depth_scale_and_shift(
         depth_pred.squeeze(1), target_proc_t, target_proc_t > 0
     )
-    pred_depth_scaled = scale[:, None, None] * depth_pred.squeeze(1) + shift[:, None, None]
+    pred_depth_scaled = scale * depth_pred + shift
+
     pred_np = np.clip(pred_depth_scaled.detach().cpu().squeeze().numpy(), 0, 80.0)
-    pred_np_raw = np.clip(depth_pred.squeeze().detach().cpu().numpy(), 0, 80.0)
-    target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), 80.0)
+
+    pred_np_raw = depth_pred.squeeze().detach().cpu().numpy()
+
+    target_np = target_proc_t.detach().cpu().squeeze().numpy()
 
     mask = np.ones_like(target_np, dtype=bool)
 

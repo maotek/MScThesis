@@ -18,7 +18,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument("--index", type=int, default=0, help="Index within the sequence to visualize (depth-aligned events).")
@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint",
         type=str,
-        default=None,
+        default=os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar"),
         help="Optional E2VID checkpoint path. Defaults to models/rpg_e2vid/pretrained/E2VID_lightweight.pth.tar",
     )
     parser.add_argument("--output-dir", type=str, default="output/test_e2vid_on_dsec", help="Where to save visualizations.")
@@ -64,7 +64,6 @@ def main() -> None:
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="train",
         self_supervised=False,
         postfix="",
     )

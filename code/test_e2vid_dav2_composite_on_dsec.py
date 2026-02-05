@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import torch
 
-from evaluation import add_to_metrics, prepare_target_data, prepare_target_data_torch
+from evaluation import add_to_metrics, prepare_target_data_torch
 from losses import normalized_depth_scale_and_shift
 from util import depth_to_colormap, voxelgrid_to_uint8, save_image, save_voxelgrid
 from pprint import pprint
@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
@@ -50,8 +50,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--e2vid-checkpoint",
         type=str,
-        default=None,
-        help="Optional E2VID checkpoint path. Defaults to models/rpg_e2vid/pretrained/E2VID_lightweight.pth.tar",
+        default=os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar"),
+        help="Optional E2VID checkpoint path.",
     )
     parser.add_argument(
         "--dav2-checkpoint",
@@ -172,7 +172,6 @@ def main() -> None:
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="validation",
         self_supervised=False,
         postfix="",
     )
@@ -185,25 +184,27 @@ def main() -> None:
         dav2_encoder="vits",
         dav2_checkpoint=args.dav2_checkpoint,
         device=device,
+        input_size_height=266,
+        input_size_width=350,
     )
 
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
 
     # Run E2VID/DAV2 pipeline
-    depth, composite = model(events)  # composite: (B,3,H,W)
+    depth = model(events)  # composite: (B,1,320,640)
+    composite = model.composite_temp  # (B,3,320,640)
 
     depth = 1.0 / (depth + 1)
-    depth = torch.clamp(depth, 0.0, args.clip_distance)
 
     target_depth_t = sample["depth"][0].to(device)
     target_proc_t = prepare_target_data_torch(target_depth_t, args.clip_distance)
     scale, shift = normalized_depth_scale_and_shift(
         depth.squeeze(1), target_proc_t, target_proc_t > 0
     )
-    pred_depth_scaled = scale[:, None, None] * depth.squeeze(1) + shift[:, None, None]
+    pred_depth_scaled = scale * depth + shift
     pred_np = np.clip(pred_depth_scaled.detach().cpu().squeeze().numpy(), 0, args.clip_distance)
-    pred_np_raw = np.clip(depth.squeeze().detach().cpu().numpy(), 0, args.clip_distance)
-    target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), args.clip_distance)
+    pred_np_raw = depth.detach().cpu().squeeze().numpy()
+    target_np = target_proc_t.detach().cpu().squeeze().numpy()
 
     mask = np.ones_like(target_np, dtype=bool)
     metrics_sum = add_to_metrics(

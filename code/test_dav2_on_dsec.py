@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
@@ -46,7 +46,6 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional checkpoint path. Defaults to models/dav2/checkpoints/depth_anything_v2_<encoder>.pth",
     )
-    parser.add_argument("--input-size", type=int, default=518, help="Square resize fed into the model.")
     parser.add_argument(
         "--time-window-ms",
         type=int,
@@ -125,6 +124,7 @@ def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target
 @torch.no_grad()
 def main() -> None:
     args = parse_args()
+    out_dir = ensure_dir(args.output_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     rep = Tencode(height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True, white_frame=True)
@@ -145,7 +145,6 @@ def main() -> None:
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="train",
         self_supervised=False,
         postfix="",
     )
@@ -153,29 +152,45 @@ def main() -> None:
     assert 0 <= args.index < len(dataset), f"Index {args.index} out of range for sequence of length {len(dataset)}"
     sample = dataset[args.index]
 
-    model = Dav2(encoder=args.encoder, checkpoint=args.checkpoint, device=device, input_size=args.input_size, rgb=False)
+    checkpoint_path = args.checkpoint
+    if checkpoint_path is None:
+        checkpoint_path = os.path.join(
+            "models", "dav2", "checkpoints", f"depth_anything_v2_{args.encoder}.pth"
+        )
+    model = Dav2(
+        encoder=args.encoder,
+        checkpoint=checkpoint_path,
+        device=device,
+        input_size_height=266,
+        input_size_width=350,
+        rgb=False,
+    )
 
-    events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
+    # events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
+    # torch.save(events, os.path.join(args.output_dir, f"{args.index:05d}_events_tensor.pt"))
+    events= torch.load(os.path.join(args.output_dir, f"{args.index:05d}_events_tensor.pt"))
 
-    # print("Min/max events input:", events.min().item(), events.max().item())
     depth_pred = model(events).squeeze(1)  # [B,H,W]
 
     depth_pred = 1.0 / (depth_pred + 1) # Convert from inverse depth to depth in meters
-    depth_pred = torch.clamp(depth_pred, 0.0, 80.0)
+    # depth_pred = torch.clamp(depth_pred, 0.0, 80.0)
 
     # Apply scale-shift normalization to match ground truth
     target_depth_t = sample["depth"][0].to(device)
+
     target_proc_t = prepare_target_data_torch(target_depth_t, 80.0)
+
     scale, shift = normalized_depth_scale_and_shift(
-        depth_pred, target_proc_t, target_proc_t > 0
+        depth_pred.squeeze(1), target_proc_t, target_proc_t > 0
     )
 
-    print(scale, shift)
+    print(f"Scale: {scale.item():.4f}, Shift: {shift.item():.4f}")
     
-    pred_depth_scaled = scale[:, None, None] * depth_pred + shift[:, None, None]
+    pred_depth_scaled = scale * depth_pred + shift
     pred_np = np.clip(pred_depth_scaled.detach().cpu().squeeze().numpy(), 0, 80.0)
-    pred_np_raw = np.clip(depth_pred.detach().cpu().squeeze().numpy(), 0, 80.0)
-    target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), 80.0)
+
+    pred_np_raw = depth_pred.detach().cpu().squeeze().numpy()
+    target_np = target_proc_t.detach().cpu().squeeze().numpy()
 
 
     mask = np.ones_like(target_np, dtype=bool)
@@ -197,9 +212,9 @@ def main() -> None:
         for k, v in metrics_sum.items()
         if not k.startswith(("_10_", "_20_", "_30_"))
     }
+
     pprint(metrics_filtered)
 
-    out_dir = ensure_dir(args.output_dir)
     visualize(sample, pred_np, pred_np_raw, target_np, out_dir, args.index)
     print(f"Saved outputs to {out_dir}")
 

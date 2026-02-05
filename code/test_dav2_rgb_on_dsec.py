@@ -13,7 +13,7 @@ from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from networks.dav2 import Dav2
 from datasets.events import Tencode
 from datasets.utils import fetch_preprocessing
-from evaluation import add_to_metrics, prepare_target_data_torch, prepare_target_data
+from evaluation import add_to_metrics, prepare_target_data_torch
 from losses import normalized_depth_scale_and_shift
 from util import (
     depth_to_colormap,
@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
@@ -49,7 +49,6 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional checkpoint path. Defaults to models/dav2/checkpoints/depth_anything_v2_<encoder>.pth",
     )
-    parser.add_argument("--input-size", type=int, default=518, help="Square resize fed into the model.")
     parser.add_argument("--output-dir", type=str, default="output/test_dav2_rgb_on_dsec", help="Where to save visualizations.")
     return parser.parse_args()
 
@@ -139,7 +138,6 @@ def main() -> None:
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="validate",
         self_supervised=False,
         postfix="",
     )
@@ -147,15 +145,28 @@ def main() -> None:
     assert 0 <= args.index < len(dataset), f"Index {args.index} out of range for sequence of length {len(dataset)}"
     sample = dataset[args.index]
 
-    model = Dav2(encoder=args.encoder, checkpoint=args.checkpoint, device=device, input_size=args.input_size, rgb=True)
+    checkpoint_path = args.checkpoint
+    if checkpoint_path is None:
+        checkpoint_path = os.path.join(
+            "models", "dav2", "checkpoints", f"depth_anything_v2_{args.encoder}.pth"
+        )
+    model = Dav2(
+        encoder=args.encoder,
+        checkpoint=checkpoint_path,
+        device=device,
+        input_size_height=266,
+        input_size_width=350,
+        rgb=True,
+    )
 
     rgb = sample["rgb"][0].unsqueeze(0).to(device)
     rgb = torch.nn.functional.interpolate(rgb, size=(320, 640), mode='bilinear', align_corners=False)
     print("min/max RGB input:", rgb.min().item(), rgb.max().item())
     depth_pred = model(rgb)
+    # torch.save(depth_pred, os.path.join(args.output_dir, f"{args.index:05d}_rgb_tensor.pt"))
 
-    depth_pred = 1.0 / (depth_pred + 1) # Convert from inverse depth to depth in meters
-    depth_pred = torch.clamp(depth_pred, 0.0, 80.0)
+    # depth_pred = torch.load(os.path.join(args.output_dir, f"{args.index:05d}_rgb_tensor.pt"))
+    depth_pred = 1.0 / (depth_pred + 2) # Convert from inverse depth to depth in meters
 
     # Apply scale-shift normalization to match ground truth
     target_depth_t = sample["depth"][0].to(device)
@@ -163,10 +174,10 @@ def main() -> None:
     scale, shift = normalized_depth_scale_and_shift(
         depth_pred.squeeze(1), target_proc_t, target_proc_t > 0
     )
-    pred_depth_scaled = scale[:, None, None] * depth_pred.squeeze(1) + shift[:, None, None]
+    pred_depth_scaled = scale * depth_pred + shift
     pred_np = np.clip(pred_depth_scaled.detach().cpu().squeeze().numpy(), 0, 80.0)
-    pred_np_raw = np.clip(depth_pred.squeeze().detach().cpu().numpy(), 0, 80.0)
-    target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), 80.0)
+    pred_np_raw = depth_pred.detach().cpu().squeeze().numpy()
+    target_np = target_proc_t.detach().cpu().squeeze().numpy()
 
     mask = np.ones_like(target_np, dtype=bool)
 

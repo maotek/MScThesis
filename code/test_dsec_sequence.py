@@ -19,8 +19,8 @@ def main():
     parser.add_argument(
         "sequence_path",
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_c",
-        help="Path to a DSEC sequence folder (default: datasets/DSEC/data/validate/interlaken_00_c)",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
+        help="Path to a DSEC sequence folder",
     )
     parser.add_argument("--index", type=int, default=0, help="Sample index in the sequence")
     parser.add_argument("--time-window-ms", type=int, default=50, help="Event window in milliseconds")
@@ -56,7 +56,6 @@ def main():
         load_images=args.load_images == "yes",
         sequence_window=1,
         sequence_step=1,
-        split="train",
         self_supervised=False,
     )
 

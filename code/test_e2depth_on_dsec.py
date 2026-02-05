@@ -12,7 +12,7 @@ from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events.events_representations import E2DepthVoxelGrid, VoxelGrid
 from networks.e2depth import load_e2depth
 from datasets.utils import fetch_preprocessing
-from evaluation import prepare_target_data_torch, prepare_target_data
+from evaluation import prepare_target_data_torch
 from losses import normalized_depth_scale_and_shift
 from util import depth_to_colormap, voxelgrid_to_uint8, save_image, save_voxelgrid
 
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument("--index", type=int, default=50, help="Index within the sequence to visualize (depth-aligned events).")
@@ -132,7 +132,6 @@ def main() -> None:
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="train",
         self_supervised=False,
         postfix="",
     )
@@ -153,11 +152,11 @@ def main() -> None:
     scale, shift = normalized_depth_scale_and_shift(
         pred_raw, target_proc_t, target_proc_t > 0
     )
-    pred_scaled = scale[:, None, None] * pred_raw + shift[:, None, None]
+    pred_scaled = scale * pred_raw + shift
 
     pred_np = np.clip(pred_scaled.detach().cpu().squeeze().numpy(), 0, 80.0)
-    pred_np_raw = np.clip(pred_raw.detach().cpu().squeeze().numpy(), 0, 80.0)
-    target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), 80.0)
+    pred_np_raw = pred_raw.detach().cpu().squeeze().numpy()
+    target_np = target_proc_t.detach().cpu().squeeze().numpy()
 
     out_dir = ensure_dir(args.output_dir)
     visualize(sample, pred_np, pred_np_raw, target_np, out_dir, args.index)

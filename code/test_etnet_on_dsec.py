@@ -17,7 +17,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument("--index", type=int, default=0, help="Index within the sequence to visualize (depth-aligned events).")
@@ -61,13 +61,11 @@ def main() -> None:
         sequence_path=args.sequence,
         event_representation=rep,
         time_window_ms=args.time_window_ms,
-        # event_window_method="between_frames",
         augmentator=None,
         load_images=False,
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="train",
         self_supervised=False,
         postfix="",
     )

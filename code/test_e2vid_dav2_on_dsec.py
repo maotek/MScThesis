@@ -13,7 +13,7 @@ from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events.events_representations import VoxelGrid, E2vidVoxelGrid
 from networks.e2vid_dav2 import E2VIDDav2
-from evaluation import prepare_target_data_torch, prepare_target_data
+from evaluation import prepare_target_data_torch
 from losses import normalized_depth_scale_and_shift
 from datasets.utils import fetch_preprocessing
 from util import depth_to_colormap, voxelgrid_to_uint8, save_image, save_voxelgrid
@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validate/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_f",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
@@ -51,14 +51,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--e2vid-checkpoint",
         type=str,
-        default=None,
+        default=os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar"),
         help="Optional E2VID checkpoint path. Defaults to models/rpg_e2vid/pretrained/E2VID_lightweight.pth.tar",
     )
     parser.add_argument(
         "--dav2-checkpoint",
         type=str,
         default=os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth"),
-        help="DAV2 checkpoint path (default: models/dav2/checkpoints/depth_anything_v2_vits.pth)",
+        help="DAV2 checkpoint path",
     )
     parser.add_argument(
         "--output-dir",
@@ -160,7 +160,6 @@ def main() -> None:
         overfit=False,
         sequence_window=1,
         sequence_step=1,
-        split="train",
         self_supervised=False,
         postfix="",
     )
@@ -173,6 +172,8 @@ def main() -> None:
         dav2_encoder="vits",
         dav2_checkpoint=args.dav2_checkpoint,
         device=device,
+        input_size_height=266,
+        input_size_width=350,
     )
 
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
@@ -182,7 +183,6 @@ def main() -> None:
     depth = model.dav2(intensity.repeat(1, 3, 1, 1))  # (B,1,H,W)
 
     depth = 1.0 / (depth + 1) # Convert from inverse depth to depth in meters
-    depth = torch.clamp(depth, 0.0, 80.0)
 
     # Apply scale-shift normalization to match ground truth
     target_depth_t = sample["depth"][0].to(device)
@@ -190,10 +190,10 @@ def main() -> None:
     scale, shift = normalized_depth_scale_and_shift(
         depth.squeeze(1), target_proc_t, target_proc_t > 0
     )
-    pred_depth_scaled = scale[:, None, None] * depth.squeeze(1) + shift[:, None, None]
+    pred_depth_scaled = scale * depth + shift
     pred_np = np.clip(pred_depth_scaled.detach().cpu().squeeze().numpy(), 0, 80.0)
-    pred_np_raw = np.clip(depth.squeeze().detach().cpu().numpy(), 0, 80.0)
-    target_np = prepare_target_data(target_proc_t.detach().cpu().squeeze().numpy(), 80.0)
+    pred_np_raw = depth.detach().cpu().squeeze().numpy()
+    target_np = target_proc_t.detach().cpu().squeeze().numpy()
 
     mask = np.ones_like(target_np, dtype=bool)
 
