@@ -56,18 +56,18 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="output",
-        help="Directory containing evaluate_*.csv files (default: output).",
+        default="results",
+        help="Directory containing evaluate_*.csv files (default: results).",
     )
     parser.add_argument(
         "--save-md",
         type=str,
-        default=os.path.join("output", "output.md"),
-        help="Path to save the Markdown table (default: output/output.md).",
+        default=os.path.join("results", "output.md"),
+        help="Path to save the Markdown table (default: results/output.md).",
     )
     args = parser.parse_args()
 
-    csv_paths = sorted(glob(os.path.join(args.output_dir, "evaluate_*.csv")))
+    csv_paths = sorted(glob(os.path.join(args.output_dir, "*.csv")))
     if not csv_paths:
         print(f"No evaluate_*.csv files found under {args.output_dir}")
         return
