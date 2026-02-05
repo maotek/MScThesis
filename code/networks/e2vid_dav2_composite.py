@@ -20,11 +20,13 @@ class E2VIDDav2Composite(torch.nn.Module):
         dav2_encoder: str = "vits",
         dav2_checkpoint: str = None,
         device: torch.device = None,
+        input_size_width: int = 350,
+        input_size_height: int = 266,
     ) -> None:
         super().__init__()
         self.device = device
         self.e2vid = E2VID(weights_path=e2vid_weights, device=self.device)
-        self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
+        self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device, input_size_width=input_size_width, input_size_height=input_size_height)
         self.to(self.device)
 
         self.composite_temp = None  # For debugging and visualizing the composite input

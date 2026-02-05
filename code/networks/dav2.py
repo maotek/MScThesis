@@ -35,13 +35,15 @@ class Dav2(torch.nn.Module):
         encoder: str = "vits",
         checkpoint: str = None,
         device: torch.device = None,
-        input_size: int = 518,
+        input_size_height: int = 266,
+        input_size_width: int = 350,
         rgb: bool = False,
     ) -> None:
         super().__init__()
         assert encoder in MODEL_CONFIGS, f"Unknown encoder {encoder}"
         self.encoder = encoder
-        self.input_size = input_size
+        self.input_size_height = input_size_height
+        self.input_size_width = input_size_width
         self.device = device
         self.rgb = rgb
 
@@ -49,7 +51,7 @@ class Dav2(torch.nn.Module):
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint}")
         print("[DAv2] Loading DepthAnythingV2 checkpoint from:", checkpoint)
         print("[DAv2] Using encoder:", encoder)
-        print("[DAv2] Input size:", input_size)
+        print("[DAv2] Input size (H,W):", (self.input_size_height, self.input_size_width))
         print("[DAv2] Device:", self.device)
 
         cfg = MODEL_CONFIGS[encoder]
@@ -69,27 +71,13 @@ class Dav2(torch.nn.Module):
         """
         assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
 
-        # If RGB, then we use the DepthAnythingV2 infer_image path, because of ImageNet normalization and aspect-ratio preserving resize.
+        # Apply ImageNet normalization only for RGB inputs.
         if self.rgb:
-            return self.infer_image(x)
-
-        orig_hw = x.shape[-2:]
-        x_resized = F.interpolate(
-            x,
-            size=(self.input_size, self.input_size),
-            mode="bilinear",
-            align_corners=False,
-        )
-        depth = self.model(x_resized)
-        if depth.dim() == 3:
-            depth = depth.unsqueeze(1)
-        elif depth.shape[1] != 1:
-            depth = depth[:, :1]
-        depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=False)
-        return depth
+            return self.infer_image(x, normalize_imagenet=True)
+        return self.infer_image(x, normalize_imagenet=False)
 
     @torch.no_grad()
-    def infer_image(self, x: torch.Tensor) -> torch.Tensor:
+    def infer_image(self, x: torch.Tensor, normalize_imagenet: bool = True) -> torch.Tensor:
         """Inference path matching DepthAnythingV2 infer_image.
 
         Uses aspect-ratio preserving resize and ImageNet normalization as implemented
@@ -100,42 +88,37 @@ class Dav2(torch.nn.Module):
 
         transform = [
             Resize(
-                width=self.input_size,
-                height=self.input_size,
+                width=self.input_size_width,
+                height=self.input_size_height,
                 resize_target=False,
                 keep_aspect_ratio=True,
                 ensure_multiple_of=14,
                 resize_method="lower_bound",
                 image_interpolation_method=cv2.INTER_CUBIC,
             ),
-            NormalizeImage(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            PrepareForNet(),
         ]
+        if normalize_imagenet:
+            transform.append(NormalizeImage(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
+        transform.append(PrepareForNet())
 
         images = []
         for img in x:
             img_np = img.detach().cpu().permute(1, 2, 0).numpy()
-            # DSEC loader returns float [0,1] in RGB already
-            # img_np = (img_np.clip(0.0, 1.0) * 255.0).astype("uint8")
-            # img_bgr = img_np[..., ::-1]
-            # img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB) / 255.0
-            # sample = {"image": img_rgb}
+            # img_np needs to be in [0,1] float and in RGB, which it already is.
             sample = {"image": img_np}
             for t in transform:
                 sample = t(sample)
 
             image_t = torch.from_numpy(sample["image"]).unsqueeze(0)
+            # print(image_t.shape)
             images.append(image_t)
 
         image_batch = torch.cat(images, dim=0).to(self.device)
 
-        depth = self.model(image_batch)
-        if depth.dim() == 3:
-            depth = depth.unsqueeze(1)
-        elif depth.shape[1] != 1:
-            depth = depth[:, :1]
+        depth = self.model(image_batch).unsqueeze(1) # (B,1,H',W') / (B,1,266,532)
 
-        if depth.shape[-2:] != orig_hw:
-            depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=True)
+        # print(depth.shape)
+
+        depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=True)
 
         return depth
