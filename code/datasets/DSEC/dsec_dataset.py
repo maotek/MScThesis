@@ -41,6 +41,7 @@ def fetch_event_representation(config: Dict[str, Any]) -> EventRepresentation:
     width = config.get("width", DSEC_WIDTH)
 
     if rep_type == "tencode" or rep_type == "rgb":
+        # For RGB, we still use Tencode representation but has no use case, since we will only use the RGB from the dataloader.
         return Tencode(
             height=height,
             width=width,
