@@ -61,8 +61,15 @@ python -m evaluate --config-path configs/validation/etnet_dav2_voxelgrid.json --
 ```
 
 ### Concentration + DAv2
+Evaluate the model
 ```bash
 python -m evaluate --config-path configs/validation/concentration_dav2_voxelgrid.json --csv-path results/concentration_dav2_voxelgrid.csv
+```
+
+Train the model
+
+```bash
+python -m train_concentration_dav2 --config-path configs/train/concentration_dav2_voxelgrid.json
 ```
 
 ## Notes
