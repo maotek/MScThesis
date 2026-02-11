@@ -60,6 +60,11 @@ python -m evaluate --config-path configs/validation/e2vid_dav2_composite_voxelgr
 python -m evaluate --config-path configs/validation/etnet_dav2_voxelgrid.json --csv-path results/etnet_dav2_voxelgrid.csv
 ```
 
+### Concentration + DAv2
+```bash
+python -m evaluate --config-path configs/validation/concentration_dav2_voxelgrid.json --csv-path results/concentration_dav2_voxelgrid.csv
+```
+
 ## Notes
 
 - Visualization settings (`vis_interval`, `vis_dir`) are controlled by each JSON config.

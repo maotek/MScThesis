@@ -1,0 +1,130 @@
+from pathlib import Path
+from typing import Optional
+
+import torch
+import torch.nn.functional as F
+
+from networks.dav2 import Dav2
+
+
+
+class _ConvBlock(torch.nn.Module):
+    def __init__(self, in_channels: int, out_channels: int) -> None:
+        super().__init__()
+        self.block = torch.nn.Sequential(
+            torch.nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            torch.nn.BatchNorm2d(out_channels),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            torch.nn.BatchNorm2d(out_channels),
+            torch.nn.ReLU(inplace=True),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.block(x)
+
+
+class SmallConcentrationUNet(torch.nn.Module):
+    """Small UNet-like concentrator mapping event tensors to 3-channel DAV2 input."""
+
+    def __init__(self, in_channels: int = 5, base_channels: int = 32) -> None:
+        super().__init__()
+        self.enc1 = _ConvBlock(in_channels, base_channels)
+        self.enc2 = _ConvBlock(base_channels, base_channels * 2)
+        self.bottleneck = _ConvBlock(base_channels * 2, base_channels * 4)
+        self.dec2 = _ConvBlock(base_channels * 4 + base_channels * 2, base_channels * 2)
+        self.dec1 = _ConvBlock(base_channels * 2 + base_channels, base_channels)
+        self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+        self.out_conv = torch.nn.Conv2d(base_channels, 3, kernel_size=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        e1 = self.enc1(x)
+        e2 = self.enc2(self.pool(e1))
+        b = self.bottleneck(self.pool(e2))
+
+        d2 = F.interpolate(b, size=e2.shape[-2:], mode="bilinear", align_corners=False)
+        d2 = self.dec2(torch.cat([d2, e2], dim=1))
+
+        d1 = F.interpolate(d2, size=e1.shape[-2:], mode="bilinear", align_corners=False)
+        d1 = self.dec1(torch.cat([d1, e1], dim=1))
+
+        return torch.sigmoid(self.out_conv(d1))
+
+
+class ConcentrationDav2(torch.nn.Module):
+    """Pipeline: events -> small UNet concentrator -> DAV2 depth.
+
+    The concentrator is trainable. DAV2 can be frozen/unfrozen with `freeze_dav2`.
+    """
+
+    def __init__(
+        self,
+        input_channels: int = 5,
+        concentrator_base_channels: int = 32,
+        dav2_encoder: str = "vits",
+        dav2_checkpoint: Optional[str] = None,
+        input_size_width: int = 350,
+        input_size_height: int = 266,
+        freeze_dav2: bool = True,
+        device: torch.device = None,
+    ) -> None:
+        super().__init__()
+        self.device = device
+        self.freeze_dav2 = bool(freeze_dav2)
+        self.in_channels = input_channels
+
+        self.vis_temp = None
+
+        self.concentrator = SmallConcentrationUNet(
+            in_channels=input_channels,
+            base_channels=concentrator_base_channels,
+        )
+
+        if dav2_checkpoint is None:
+            dav2_checkpoint = str(
+                Path(__file__).resolve().parents[1]
+                / "models"
+                / "dav2"
+                / "checkpoints"
+                / f"depth_anything_v2_{dav2_encoder}.pth"
+            )
+        checkpoint_path = Path(dav2_checkpoint)
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(f"DAv2 checkpoint not found: {checkpoint_path}")
+
+        self.dav2 = Dav2(
+            encoder=dav2_encoder,
+            checkpoint=str(checkpoint_path),
+            device=self.device,
+            input_size_width=input_size_width,
+            input_size_height=input_size_height,
+            rgb=False,
+        )
+
+        self.set_dav2_frozen(self.freeze_dav2)
+
+        self.to(self.device)
+
+        print("[ConcentrationDav2] DAv2 checkpoint:", str(checkpoint_path))
+        print("[ConcentrationDav2] DAv2 encoder:", dav2_encoder)
+        print("[ConcentrationDav2] DAv2 frozen:", self.freeze_dav2)
+        print("[ConcentrationDav2] Device:", self.device)
+
+
+    def set_dav2_frozen(self, freeze: bool = True) -> None:
+        self.freeze_dav2 = bool(freeze)
+        for param in self.dav2.parameters():
+            param.requires_grad = not self.freeze_dav2
+
+    def forward(self, events: torch.Tensor) -> torch.Tensor:
+        assert events.dim() == 4 and events.shape[1] == self.in_channels, f"Expected events of shape (B,{self.in_channels},H,W)"
+
+        events = events.to(self.device)
+        concentrator_rgb = self.concentrator(events)
+
+        if True:
+            self.vis_temp = concentrator_rgb.detach().cpu()
+
+        depth = self.dav2(concentrator_rgb)
+            
+        return depth
