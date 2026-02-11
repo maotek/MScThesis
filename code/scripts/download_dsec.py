@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sequential DSEC downloader (train split)
+Sequential DSEC downloader (train/validation splits)
 
 Per sequence NAME, downloads into:
   NAME/
@@ -19,10 +19,10 @@ Downloads ONE SEQUENCE AT A TIME.
 Strips trailing newline(s) from timestamps files after download.
 
 Usage:
-  python download_dsec_train.py --out ./DSEC_train
-  python download_dsec_train.py --out ./DSEC_train --seq zurich_city_01_b
-  python download_dsec_train.py --out ./DSEC_train --no-extract
-  python download_dsec_train.py --out ./DSEC_train --keep-zips
+    python download_dsec.py --split all --out datasets/DSEC/data
+    python download_dsec.py --split train --out datasets/DSEC/data --seq zurich_city_01_b
+    python download_dsec.py --split validation --out datasets/DSEC/data --no-extract
+    python download_dsec.py --split train --out datasets/DSEC/data --keep-zips
 """
 
 from __future__ import annotations
@@ -39,7 +39,6 @@ import requests
 
 
 BASE_URL = "https://download.ifi.uzh.ch/rpg/DSEC/"
-SPLIT = "train"
 
 FILES = [
     "disparity_timestamps.txt",
@@ -50,6 +49,24 @@ FILES = [
     "disparity_event.zip",
     "disparity_image.zip",
 ]
+
+DSEC_TRAIN = {
+    "interlaken_00_c":269,  "interlaken_00_d":996,   "interlaken_00_e":996,  "zurich_city_00_a":470,
+    "zurich_city_00_b":732, "zurich_city_01_a":341,  "zurich_city_01_b":663, "zurich_city_01_c":489,
+    "zurich_city_01_d":398, "zurich_city_01_e":996,  "zurich_city_01_f":787, "zurich_city_02_a":118,
+    "zurich_city_02_b":613, "zurich_city_02_c":1442, "zurich_city_02_d":922, "zurich_city_02_e":923,
+    "zurich_city_03_a":442, "zurich_city_04_a":351,  "zurich_city_04_b":135, "zurich_city_04_c":591,
+    "zurich_city_04_d":479, "zurich_city_04_e":135,  "zurich_city_04_f":430, "zurich_city_09_a":907,
+    "zurich_city_09_b":184, "zurich_city_09_c":662,  "zurich_city_09_e":409, "zurich_city_10_a":1158,
+    "zurich_city_11_a":233, "zurich_city_11_b":967,  "zurich_city_11_c":979,
+}
+
+DSEC_VALIDATION = {
+    "interlaken_00_f":746,  "interlaken_00_g":668,   "thun_00_a":120,        "zurich_city_05_a":877,
+    "zurich_city_05_b":815, "zurich_city_06_a":762,  "zurich_city_07_a":732, "zurich_city_08_a":394,
+    "zurich_city_09_d":850, "zurich_city_10_b":1203,
+}
+
 
 SCENES = {
     # "interlaken_00_c": 269,
@@ -98,15 +115,16 @@ SCENES = {
 
 @dataclass(frozen=True)
 class Job:
+    split: str
     seq: str
     filename: str
 
     @property
     def remote_url(self) -> str:
-        return f"{BASE_URL}{SPLIT}/{self.seq}/{self.seq}_{self.filename}"
+        return f"{BASE_URL}train/{self.seq}/{self.seq}_{self.filename}"
 
     def local_path(self, out_root: Path) -> Path:
-        seq_dir = out_root / self.seq
+        seq_dir = out_root / self.split / self.seq
         seq_dir.mkdir(parents=True, exist_ok=True)
 
         # timestamps should NOT have sequence prefix locally
@@ -227,13 +245,25 @@ def strip_trailing_newlines(path: Path) -> None:
         path.write_bytes(stripped)
 
 
-def make_jobs(seqs: Iterable[str]) -> list[Job]:
-    return [Job(seq=s, filename=f) for s in seqs for f in FILES]
+def make_jobs(split: str, seqs: Iterable[str]) -> list[Job]:
+    return [Job(split=split, seq=s, filename=f) for s in seqs for f in FILES]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=str, default="datasets/DSEC/data/test")
+    ap.add_argument(
+        "--out",
+        type=str,
+        default="datasets/DSEC/data",
+        help="Root output directory. Data will be placed in <out>/<split>/<sequence>/.",
+    )
+    ap.add_argument(
+        "--split",
+        type=str,
+        default="all",
+        choices=["train", "validation", "all"],
+        help="Which split(s) to download.",
+    )
     ap.add_argument("--no-extract", action="store_true")
     ap.add_argument("--keep-zips", action="store_true")
     ap.add_argument("--seq", action="append", default=None)
@@ -242,56 +272,64 @@ def main() -> int:
     out_root = Path(args.out).expanduser().resolve()
     out_root.mkdir(parents=True, exist_ok=True)
 
-    seqs = list(SCENES.keys()) if args.seq is None else args.seq
+    split_map = {
+        "train": DSEC_TRAIN,
+        "validation": DSEC_VALIDATION,
+    }
+    splits = [args.split] if args.split != "all" else ["train", "validation"]
 
-    print(f"Output: {out_root}")
-    print(f"Sequences: {len(seqs)}")
-    print(f"Split: {SPLIT}\n")
+    print(f"Output root: {out_root}")
+    print(f"Splits: {', '.join(splits)}\n")
 
-    for i, seq in enumerate(seqs, 1):
-        print(f"=== [{i}/{len(seqs)}] Sequence: {seq} ===")
-        jobs = [Job(seq=seq, filename=f) for f in FILES]
+    for split in splits:
+        seqs = list(split_map[split].keys()) if args.seq is None else args.seq
+        print(f"Split: {split}")
+        print(f"Sequences: {len(seqs)}\n")
 
-        for job in jobs:
-            url = job.remote_url
-            dst = job.local_path(out_root)
+        for i, seq in enumerate(seqs, 1):
+            print(f"=== [{i}/{len(seqs)}] {split} sequence: {seq} ===")
+            jobs = [Job(split=split, seq=seq, filename=f) for f in FILES]
 
-            if dst.exists() and dst.stat().st_size > 0:
-                print(f"  Skipping {dst.name} (exists)")
-                continue
+            for job in jobs:
+                url = job.remote_url
+                dst = job.local_path(out_root)
 
-            print(f"  Downloading {dst.name}")
-            try:
-                download_with_resume(url, dst)
-
-                # Ensure timestamps files have NO trailing newline
-                if dst.name in ("disparity_timestamps.txt", "image_timestamps.txt"):
-                    strip_trailing_newlines(dst)
-
-            except Exception as e:
-                print(f"  FAILED {dst.name}: {e}")
-                print("  Continuing to next file...\n")
-                continue
-
-        if not args.no_extract:
-            print("  Extracting zips...")
-            seq_dir = out_root / seq
-            for f in FILES:
-                if not f.endswith(".zip"):
-                    continue
-                zip_path = seq_dir / f"{seq}_{f}"
-                if not zip_path.exists():
+                if dst.exists() and dst.stat().st_size > 0:
+                    print(f"  Skipping {dst.name} (exists)")
                     continue
 
-                stem = f[:-4]
-                extract_dir = seq_dir / f"{seq}_{stem}"
-                print(f"    {zip_path.name} -> {extract_dir.name}")
-                extract_zip(zip_path, extract_dir)
+                print(f"  Downloading {dst.name}")
+                try:
+                    download_with_resume(url, dst)
 
-                if not args.keep_zips:
-                    zip_path.unlink(missing_ok=True)
+                    # Ensure timestamps files have NO trailing newline
+                    if dst.name in ("disparity_timestamps.txt", "image_timestamps.txt"):
+                        strip_trailing_newlines(dst)
 
-        print(f"=== Finished {seq} ===\n")
+                except Exception as e:
+                    print(f"  FAILED {dst.name}: {e}")
+                    print("  Continuing to next file...\n")
+                    continue
+
+            if not args.no_extract:
+                print("  Extracting zips...")
+                seq_dir = out_root / split / seq
+                for f in FILES:
+                    if not f.endswith(".zip"):
+                        continue
+                    zip_path = seq_dir / f"{seq}_{f}"
+                    if not zip_path.exists():
+                        continue
+
+                    stem = f[:-4]
+                    extract_dir = seq_dir / f"{seq}_{stem}"
+                    print(f"    {zip_path.name} -> {extract_dir.name}")
+                    extract_zip(zip_path, extract_dir)
+
+                    if not args.keep_zips:
+                        zip_path.unlink(missing_ok=True)
+
+            print(f"=== Finished {split} {seq} ===\n")
 
     print("All sequences done.")
     return 0
