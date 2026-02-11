@@ -60,7 +60,9 @@ class Dav2(torch.nn.Module):
         self.model.to(self.device)
         self.model.eval()
 
-    @torch.no_grad()
+        self.register_buffer("imagenet_mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
+        self.register_buffer("imagenet_std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
 
@@ -71,12 +73,11 @@ class Dav2(torch.nn.Module):
         """
         assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
 
-        # Apply ImageNet normalization only for RGB inputs.
-        if self.rgb:
-            return self.infer_image(x, normalize_imagenet=True)
-        return self.infer_image(x, normalize_imagenet=False)
+        normalize_imagenet = bool(self.rgb)
+        if x.requires_grad:
+            return self.infer_image_torch(x, normalize_imagenet=normalize_imagenet)
+        return self.infer_image(x, normalize_imagenet=normalize_imagenet)
 
-    @torch.no_grad()
     def infer_image(self, x: torch.Tensor, normalize_imagenet: bool = True) -> torch.Tensor:
         """Inference path matching DepthAnythingV2 infer_image.
 
@@ -121,4 +122,22 @@ class Dav2(torch.nn.Module):
 
         depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=True)
 
+        return depth
+
+    def infer_image_torch(self, x: torch.Tensor, normalize_imagenet: bool = True) -> torch.Tensor:
+        """Torch-only inference path that preserves gradients."""
+        assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
+        orig_hw = x.shape[-2:]
+
+        h, w = orig_hw
+        scale = max(self.input_size_height / float(h), self.input_size_width / float(w))
+        resized_h = int(np.ceil((h * scale) / 14.0) * 14)
+        resized_w = int(np.ceil((w * scale) / 14.0) * 14)
+
+        x = F.interpolate(x, size=(resized_h, resized_w), mode="bilinear", align_corners=False)
+        if normalize_imagenet:
+            x = (x - self.imagenet_mean) / self.imagenet_std
+
+        depth = self.model(x).unsqueeze(1)
+        depth = F.interpolate(depth, size=orig_hw, mode="bilinear", align_corners=True)
         return depth
