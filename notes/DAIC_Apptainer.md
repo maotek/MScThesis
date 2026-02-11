@@ -95,3 +95,20 @@ Or shell into it:
 ```bash
 apptainer shell --nv apptainer/image.sif
 ```
+
+# SCP data to DAIC
+
+## 1. Copy image to DAIC from local machine
+```bash
+scp image3.sif maoshengjiang@login.daic.tudelft.nl:/tudelft.net/staff-umbrella/ThesisMaosheng/apptainer/
+```
+
+## 2. Copy DSEC data to DAIC (same project folder)
+```bash
+scp -r datasets/DSEC/data maoshengjiang@login.daic.tudelft.nl:/tudelft.net/staff-umbrella/ThesisMaosheng/MScThesis/code/datasets/DSEC/
+```
+
+## 3. (Optional) Copy results back to local
+```bash
+scp -r maoshengjiang@login.daic.tudelft.nl:/tudelft.net/staff-umbrella/ThesisMaosheng/output ./output
+```
