@@ -186,7 +186,7 @@ def fetch_dataloader(config_dataloader: Dict[str, Any], test: bool = False):
         dataloaders[seq] = torch.utils.data.DataLoader(
             datasets[seq],
             batch_size=batch_size,
-            pin_memory=True,
+            pin_memory=False,
             shuffle=not test,
             num_workers=num_workers,
             drop_last=True,
