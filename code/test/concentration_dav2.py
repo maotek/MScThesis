@@ -53,6 +53,12 @@ def parse_args() -> argparse.Namespace:
         help="DAV2 checkpoint path",
     )
     parser.add_argument(
+        "--concentrator-checkpoint",
+        type=str,
+        default=os.path.join("output", "train_concentration_dav2", "epoch_005.pt"),
+        help="Optional checkpoint containing concentrator weights.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=str,
         default="output/test_concentration_dav2_on_dsec",
@@ -171,6 +177,22 @@ def main() -> None:
         dav2_checkpoint=args.dav2_checkpoint,
         device=device,
     )
+
+    if args.concentrator_checkpoint:
+        ckpt = torch.load(args.concentrator_checkpoint, map_location="cpu")
+        state = ckpt.get("model_state_dict", ckpt)
+        concentrator_state = {
+            k.replace("concentrator.", ""): v
+            for k, v in state.items()
+            if k.startswith("concentrator.")
+        }
+        total_bytes = sum(t.numel() * t.element_size() for t in state.values())
+        concentrator_bytes = sum(t.numel() * t.element_size() for t in concentrator_state.values())
+        dav2_bytes = sum(t.numel() * t.element_size() for k, t in state.items() if k.startswith("dav2."))
+        print(f"Total weights size: {total_bytes / (1024 * 1024):.2f} MB")
+        print(f"Concentrator weights size: {concentrator_bytes / (1024 * 1024):.2f} MB")
+        print(f"DAv2 weights size: {dav2_bytes / (1024 * 1024):.2f} MB")
+        model.concentrator.load_state_dict(concentrator_state, strict=True)
 
     concentrator_rgb = model.concentrator(events)
     depth_pred = model.dav2(concentrator_rgb).squeeze(1)
