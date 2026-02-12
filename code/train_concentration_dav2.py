@@ -25,11 +25,11 @@ def parse_args() -> argparse.Namespace:
         help="JSON config with data_loader and model sections.",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
-    parser.add_argument("--epochs", type=int, default=5, help="Number of epochs.")
+    parser.add_argument("--epochs", type=int, default=50, help="Number of epochs.")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
     parser.add_argument("--weight-decay", type=float, default=0.0, help="Weight decay.")
     parser.add_argument("--clip-distance", type=float, default=80.0, help="Max depth value (meters).")
-    parser.add_argument("--log-interval", type=int, default=10, help="Steps between loss logs.")
+    parser.add_argument("--log-interval", type=int, default=100, help="Steps between loss logs.")
     parser.add_argument("--save-dir", type=str, default="output/train_concentration_dav2", help="Checkpoint output dir.")
     parser.add_argument("--save-every", type=int, default=1, help="Save checkpoint every N epochs.")
     parser.add_argument("--ssi-alpha", type=float, default=0.0, help="Scale-and-shift loss alpha term.")
