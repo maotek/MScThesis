@@ -3,6 +3,7 @@
 - Literature review on event-based monocular depth estimation
     - EMoDepth
     - EMDepth
+- pin memory in config is not properly handled yet
 
 ## Github
 - Last stable commit: https://github.com/maotek/MScThesis/commit/c58b099413a5fc32d5aea4b0175df81861a0aa02
