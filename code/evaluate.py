@@ -285,7 +285,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             device=device,
         )
     elif model_name == "concentration_dav2":
-        return ConcentrationDav2(
+        model = ConcentrationDav2(
             input_channels=int(model_config.get("input_channels", 5)),
             concentrator_base_channels=int(model_config.get("concentrator_base_channels", 32)),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
@@ -295,6 +295,22 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
         )
+        ckpt = torch.load(os.path.join("output", "train_concentration_dav2", "epoch_005.pt"), map_location="cpu")
+        state = ckpt.get("model_state_dict", ckpt)
+        concentrator_state = {
+            k.replace("concentrator.", ""): v
+            for k, v in state.items()
+            if k.startswith("concentrator.")
+        }
+        total_bytes = sum(t.numel() * t.element_size() for t in state.values())
+        concentrator_bytes = sum(t.numel() * t.element_size() for t in concentrator_state.values())
+        dav2_bytes = sum(t.numel() * t.element_size() for k, t in state.items() if k.startswith("dav2."))
+        print(f"Total weights size: {total_bytes / (1024 * 1024):.2f} MB")
+        print(f"Concentrator weights size: {concentrator_bytes / (1024 * 1024):.2f} MB")
+        print(f"DAv2 weights size: {dav2_bytes / (1024 * 1024):.2f} MB")
+        model.concentrator.load_state_dict(concentrator_state, strict=True)
+
+        return model
     else:
         print(model_name)
         raise ValueError(f"Unsupported model: {model_name}")
