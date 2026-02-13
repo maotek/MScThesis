@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
-from datasets.events.events_representations import E2vidVoxelGrid
+from datasets.events.events_representations import VoxelGrid
 from datasets.utils import fetch_preprocessing
 from pprint import pprint
 from evaluation import add_to_metrics, prepare_target_data_torch
@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--index",
         type=int,
-        default=127,
+        default=100,
         help="Index within the sequence to visualize (depth-aligned events).",
     )
     parser.add_argument(
@@ -55,7 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--concentrator-checkpoint",
         type=str,
-        default=os.path.join("output", "train_concentration_dav2", "epoch_005.pt"),
+        default=os.path.join("output", "train_concentration_dav2", "epoch_050.pt"),
         help="Optional checkpoint containing concentrator weights.",
     )
     parser.add_argument(
@@ -145,7 +145,7 @@ def main() -> None:
     out_dir = ensure_dir(args.output_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    rep = E2vidVoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH)
+    rep = VoxelGrid(channels=args.num_bins, height=DSEC_HEIGHT, width=DSEC_WIDTH, normalize=True)
     preprocess_config = [
         {
             "preprocessing_type": "CenterCrop",
@@ -193,6 +193,9 @@ def main() -> None:
         print(f"Concentrator weights size: {concentrator_bytes / (1024 * 1024):.2f} MB")
         print(f"DAv2 weights size: {dav2_bytes / (1024 * 1024):.2f} MB")
         model.concentrator.load_state_dict(concentrator_state, strict=True)
+
+    concentrator_params = sum(p.numel() for p in model.concentrator.parameters())
+    print(f"Concentrator parameters: {concentrator_params}")
 
     concentrator_rgb = model.concentrator(events)
     depth_pred = model.dav2(concentrator_rgb).squeeze(1)
