@@ -88,7 +88,7 @@ sinteractive --cpus-per-task=1 --mem=8000 --time=00:30:00 --gres=gpu
 
 Run script directly:
 ```bash
-apptainer exec --nv apptainer/image3.sif python train.py
+apptainer exec --nv apptainer/image.sif python train.py
 ```
 
 Or shell into it:
