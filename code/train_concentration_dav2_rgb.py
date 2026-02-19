@@ -30,7 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight-decay", type=float, default=0.0, help="Weight decay.")
     parser.add_argument("--clip-distance", type=float, default=80.0, help="Max depth value (meters).")
     parser.add_argument("--log-interval", type=int, default=100, help="Steps between loss logs.")
-    parser.add_argument("--save-dir", type=str, default="output/train_concentration_dav2", help="Checkpoint output dir.")
+    parser.add_argument("--save-dir", type=str, default="output/train_concentration_dav2_rgb", help="Checkpoint output dir.")
     parser.add_argument("--save-every", type=int, default=1, help="Save checkpoint every N epochs.")
     parser.add_argument(
         "--resume-checkpoint",
@@ -78,7 +78,7 @@ def setup_device_and_seeds(seed: int) -> torch.device:
 
 def build_model(model_config: Dict[str, object], device: torch.device) -> ConcentrationDav2:
     return ConcentrationDav2(
-        input_channels=int(model_config.get("input_channels", 5)),
+        input_channels=int(model_config.get("input_channels", 3)),
         concentrator_base_channels=int(model_config.get("concentrator_base_channels", 32)),
         dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
         dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
@@ -120,13 +120,8 @@ def save_visualization(
         vis_dir, f"{seq_name}_epoch_{epoch:03d}_step_{step:06d}_depth.png"
     )
 
-    if concentrator_rgb.shape[0] > 1:
-        # If batch dimension exists, take the first sample for visualization.
-        save_rgb(rgb_path, concentrator_rgb[0].detach().cpu().squeeze(0))
-        save_depth_colormap(depth_path, depth[0].detach().cpu().squeeze(0))
-    else:
-        save_rgb(rgb_path, concentrator_rgb.detach().cpu().squeeze(0))
-        save_depth_colormap(depth_path, depth.detach().cpu().squeeze(0))
+    save_rgb(rgb_path, concentrator_rgb.detach().cpu().squeeze(0))
+    save_depth_colormap(depth_path, depth.detach().cpu().squeeze(0))
 
 
 def train_epoch(
@@ -148,7 +143,7 @@ def train_epoch(
     for seq_name, data_loader in dataloaders.items():
         for batch_idx, sample in enumerate(tqdm.tqdm(data_loader, desc=f"Epoch {epoch} {seq_name}")):
             target_depth_t = sample["depth"][:, 0, 0].to(device)  # (B,H,W)
-            events = sample["depth_aligned_events"][:, 0].to(device)  # (B,C,H,W)
+            events = sample["rgb"][:, 0].to(device)  # (B,C,H,W)
 
             pred_depth = model(events)  # (B,1,H,W)
             pred_depth = 1.0 / (pred_depth + 1.0)
