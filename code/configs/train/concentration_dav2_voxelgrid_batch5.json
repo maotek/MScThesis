@@ -19,7 +19,7 @@
       }
     ],
     "load_images": false,
-    "batch_size": 1,
+    "batch_size": 5,
     "num_workers": 1,
     "pin_memory": true,
     "shuffle": true,
