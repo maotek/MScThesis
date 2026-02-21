@@ -34,7 +34,7 @@ apt-get install -y apptainer
 
 ## 4. Build the image
 ```bash
-apptainer build image3.sif Apptainer2.def
+apptainer build image.sif Apptainer.def
 ```
 
 ## 5. Stop the VM when done

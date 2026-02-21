@@ -11,3 +11,5 @@ numba
 hdf5plugin
 kornia==0.8.1
 kornia_rs==0.1.9
+rosbags
+wandb
