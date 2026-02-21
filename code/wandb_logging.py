@@ -12,11 +12,10 @@ def init_training_wandb(
     entity: str = "maoshengj-tu-delft",
 ) -> None:
     config_name = os.path.splitext(os.path.basename(args.config_path))[0]
-    wandb_project = project or config_name
 
     wandb.init(
         entity=entity,
-        project=wandb_project,
+        project="MScThesis",
         name=config_name,
         config={
             "seed": args.seed,
