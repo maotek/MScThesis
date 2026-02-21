@@ -69,7 +69,21 @@ python -m evaluate --config-path configs/validation/concentration_dav2_voxelgrid
 Train the model
 
 ```bash
-python -m train_concentration_dav2 --config-path configs/train/concentration_dav2_voxelgrid.json
+python -m train_concentration_dav2 --config configs/train/concentration_dav2_voxelgrid.json --save-dir output/train_concentration_dav2
+```
+
+### Concentration + DAv2 5 batch
+Train the model
+
+```bash
+python -m train_concentration_dav2 --config configs/train/concentration_dav2_voxelgrid_batch5.json --save-dir output/train_concentration_dav2_batch5
+```
+
+### Concentration + DAv2 (on RGB)
+Train the model
+
+```bash
+python -m train_concentration_dav2_rgb --config configs/train/concentration_dav2_rgb.json --save-dir output/train_concentration_dav2_rgb
 ```
 
 ## Notes
