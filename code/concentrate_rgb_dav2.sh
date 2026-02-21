@@ -17,4 +17,4 @@ module load cuda cudnn miniconda # Load certain versions of cuda and cudnn
 
 cd MScThesis/code
 
-apptainer exec --nv ../../apptainer/image.sif python -m train_concentration_dav2_rgb --config configs/train/concentration_dav2_rgb.json
+apptainer exec --nv ../../apptainer/image.sif python -m train_concentration_dav2_rgb --config configs/train/concentration_dav2_rgb.json --save-dir output/train_concentration_dav2_rgb

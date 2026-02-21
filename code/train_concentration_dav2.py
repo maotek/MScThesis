@@ -9,6 +9,12 @@ import torch
 import tqdm
 
 from util import save_depth_colormap, save_rgb
+from wandb_logging import (
+    finish_training_wandb,
+    init_training_wandb,
+    log_train_epoch,
+    log_train_step,
+)
 
 from datasets.DSEC.dsec_dataset import fetch_dataloader as fetch_dsec_dataloader
 from evaluation import prepare_target_data_torch
@@ -168,6 +174,12 @@ def train_epoch(
             optimizer.step()
 
             running_loss += loss.item()
+            log_train_step(
+                loss=loss.item(),
+                loss_ssi=loss_ssi.item(),
+                loss_grad=loss_grad.item(),
+                epoch=epoch,
+            )
 
             if step % 500 == 0 and model.vis_temp is not None:
                 save_visualization(
@@ -216,6 +228,11 @@ def main() -> None:
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
+    init_training_wandb(
+        args=args,
+        data_loader_config=data_loader_config,
+        model_config=model_config,
+    )
 
     start_epoch = 1
     if args.resume_checkpoint:
@@ -238,23 +255,27 @@ def main() -> None:
             print(f"Resume checkpoint not found: {resume_path}. Starting from scratch.")
 
     end_epoch = start_epoch + args.epochs - 1
-    for epoch in range(start_epoch, end_epoch + 1):
-        avg_loss = train_epoch(
-            epoch=epoch,
-            dataloaders=dataloaders,
-            model=model,
-            device=device,
-            clip_distance=args.clip_distance,
-            ssi_loss=ssi_loss,
-            grad_loss=grad_loss,
-            optimizer=optimizer,
-            log_interval=args.log_interval,
-            save_dir=args.save_dir,
-        )
-        print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
+    try:
+        for epoch in range(start_epoch, end_epoch + 1):
+            avg_loss = train_epoch(
+                epoch=epoch,
+                dataloaders=dataloaders,
+                model=model,
+                device=device,
+                clip_distance=args.clip_distance,
+                ssi_loss=ssi_loss,
+                grad_loss=grad_loss,
+                optimizer=optimizer,
+                log_interval=args.log_interval,
+                save_dir=args.save_dir,
+            )
+            print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
+            log_train_epoch(avg_loss=avg_loss, epoch=epoch)
 
-        if args.save_every > 0 and epoch % args.save_every == 0:
-            save_checkpoint(args.save_dir, epoch, model, optimizer)
+            if args.save_every > 0 and epoch % args.save_every == 0:
+                save_checkpoint(args.save_dir, epoch, model, optimizer)
+    finally:
+        finish_training_wandb()
 
 
 if __name__ == "__main__":
