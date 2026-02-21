@@ -29,3 +29,5 @@ datasets/DSEC/data
 **/**.npz
 **/**.zip
 datasets/mvsec/data/
+**/**.pt
+wandb/
