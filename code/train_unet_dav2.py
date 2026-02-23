@@ -166,7 +166,7 @@ def train_epoch(
                 continue
 
             loss_ssi = ssi_loss(pred_depth, target_proc_t, valid_mask)
-            loss_grad = grad_loss(loss_ssi.__prediction_ssi, target_proc_t.unsqueeze(1), valid_mask.unsqueeze(1))
+            loss_grad = grad_loss(ssi_loss.prediction_ssi.unsqueeze(1), target_proc_t.unsqueeze(1), valid_mask.unsqueeze(1))
             loss = loss_ssi + loss_grad
 
             optimizer.zero_grad()
