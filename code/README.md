@@ -73,6 +73,11 @@ python -m train_concentration_dav2 --config configs/train/concentration_dav2_vox
 ```
 
 ### Concentration + DAv2 5 batch
+Evaluate the model
+```bash
+python -m evaluate --config-path configs/validation/concentration_dav2_batch5.json --csv-path results/concentration_dav2_batch5.csv
+```
+
 Train the model
 
 ```bash
@@ -80,6 +85,11 @@ python -m train_concentration_dav2 --config configs/train/concentration_dav2_vox
 ```
 
 ### Concentration + DAv2 (on RGB)
+Evaluate the model
+```bash
+python -m evaluate --config-path configs/validation/concentration_dav2_rgb.json --csv-path results/concentration_dav2_rgb.csv
+```
+
 Train the model
 
 ```bash
