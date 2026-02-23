@@ -20,7 +20,7 @@ from networks.dav2 import Dav2
 from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from networks.etnet_dav2 import ETNetDav2
-from networks.concentration_dav2 import ConcentrationDav2
+from networks.unet_dav2 import UNetDav2
 from evaluation import (
     add_to_metrics,
     prepare_target_data,
@@ -167,7 +167,7 @@ def evaluate_sequence(
         
         pred_depth = model(events)  # (1,1,320,640)
         
-        if model_name in ("e2vid_dav2", "etnet_dav2", "concentration_dav2", "concentration_dav2_rgb", "dav2_rgb", "dav2", "dav2_composite"):
+        if model_name in ("e2vid_dav2", "etnet_dav2", "unet_dav2", "unet_dav2_rgb", "dav2_rgb", "dav2", "dav2_composite"):
             pred_depth = 1.0 / (pred_depth + 1)  # convert to depth in ~meters
     
         pred_depth = pred_depth.squeeze(1)  # (1,320,640)
@@ -284,8 +284,8 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             input_size_height=int(model_config.get("input_size_height", 266)),
             device=device,
         )
-    elif model_name == "concentration_dav2":
-        model = ConcentrationDav2(
+    elif model_name == "unet_dav2":
+        model = UNetDav2(
             input_channels=int(model_config.get("input_channels", 5)),
             concentrator_base_channels=int(model_config.get("concentrator_base_channels", 32)),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
@@ -295,7 +295,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
         )
-        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_concentration_dav2", "epoch_050.pt")), map_location="cpu")
+        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dav2", "epoch_050.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
         concentrator_state = {
             k.replace("concentrator.", ""): v
@@ -305,8 +305,8 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
         model.concentrator.load_state_dict(concentrator_state, strict=True)
         return model
     
-    elif model_name == "concentration_dav2_rgb":
-        model = ConcentrationDav2(
+    elif model_name == "unet_dav2_rgb":
+        model = UNetDav2(
             input_channels=int(model_config.get("input_channels", 3)),
             concentrator_base_channels=int(model_config.get("concentrator_base_channels", 32)),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
@@ -316,7 +316,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
         )
-        ckpt = torch.load(os.path.join("output", "train_concentration_dav2_rgb", "epoch_030.pt"), map_location="cpu")
+        ckpt = torch.load(os.path.join("output", "train_unet_dav2_rgb", "epoch_030.pt"), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
         concentrator_state = {
             k.replace("concentrator.", ""): v
