@@ -167,7 +167,7 @@ def evaluate_sequence(
         
         pred_depth = model(events)  # (1,1,320,640)
         
-        if model_name in ("e2vid_dav2", "etnet_dav2", "concentration_dav2", "dav2_rgb", "dav2", "dav2_composite"):
+        if model_name in ("e2vid_dav2", "etnet_dav2", "concentration_dav2", "concentration_dav2_rgb", "dav2_rgb", "dav2", "dav2_composite"):
             pred_depth = 1.0 / (pred_depth + 1)  # convert to depth in ~meters
     
         pred_depth = pred_depth.squeeze(1)  # (1,320,640)
@@ -295,22 +295,37 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
         )
-        ckpt = torch.load(os.path.join("output", "train_concentration_dav2", "epoch_005.pt"), map_location="cpu")
+        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_concentration_dav2", "epoch_050.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
         concentrator_state = {
             k.replace("concentrator.", ""): v
             for k, v in state.items()
             if k.startswith("concentrator.")
         }
-        total_bytes = sum(t.numel() * t.element_size() for t in state.values())
-        concentrator_bytes = sum(t.numel() * t.element_size() for t in concentrator_state.values())
-        dav2_bytes = sum(t.numel() * t.element_size() for k, t in state.items() if k.startswith("dav2."))
-        print(f"Total weights size: {total_bytes / (1024 * 1024):.2f} MB")
-        print(f"Concentrator weights size: {concentrator_bytes / (1024 * 1024):.2f} MB")
-        print(f"DAv2 weights size: {dav2_bytes / (1024 * 1024):.2f} MB")
         model.concentrator.load_state_dict(concentrator_state, strict=True)
-
         return model
+    
+    elif model_name == "concentration_dav2_rgb":
+        model = ConcentrationDav2(
+            input_channels=int(model_config.get("input_channels", 3)),
+            concentrator_base_channels=int(model_config.get("concentrator_base_channels", 32)),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+        )
+        ckpt = torch.load(os.path.join("output", "train_concentration_dav2_rgb", "epoch_030.pt"), map_location="cpu")
+        state = ckpt.get("model_state_dict", ckpt)
+        concentrator_state = {
+            k.replace("concentrator.", ""): v
+            for k, v in state.items()
+            if k.startswith("concentrator.")
+        }
+        model.concentrator.load_state_dict(concentrator_state, strict=True)
+        return model
+    
     else:
         print(model_name)
         raise ValueError(f"Unsupported model: {model_name}")
