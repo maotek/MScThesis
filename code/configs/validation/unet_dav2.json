@@ -2,7 +2,7 @@
   "data_loader": {
     "dataset": "dsec",
     "datapath": "datasets/DSEC/data",
-    "split": "train",
+    "split": "validation",
     "concatenate_sequences": false,
     "event_representation": {
       "representation_type": "voxelgrid",
@@ -22,19 +22,24 @@
     "batch_size": 1,
     "num_workers": 1,
     "pin_memory": true,
-    "shuffle": true,
+    "shuffle": false,
     "sequence_window": 1,
     "sequence_step": 1,
     "time_window_ms": 50
   },
   "model": {
-    "model_type": "concentration_dav2",
+    "model_type": "unet_dav2",
     "input_channels": 5,
     "concentrator_base_channels": 32,
     "dav2_encoder": "vits",
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
     "input_size_width": 350,
     "input_size_height": 266,
-    "freeze_dav2": true
-  }
+    "freeze_dav2": true,
+    "checkpoint_path": "output/train_unet_dav2/epoch_050.pt"
+  },
+  "vis_interval": 200,
+  "vis_dir": "output/evaluate_unet_dav2",
+  "use_scaleshift": true,
+  "clip_distance": 80.0
 }

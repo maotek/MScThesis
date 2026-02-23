@@ -18,8 +18,8 @@
         "width": 640
       }
     ],
-    "load_images": true,
-    "batch_size": 1,
+    "load_images": false,
+    "batch_size": 5,
     "num_workers": 1,
     "pin_memory": true,
     "shuffle": true,
@@ -28,8 +28,8 @@
     "time_window_ms": 50
   },
   "model": {
-    "model_type": "concentration_dav2",
-    "input_channels": 3,
+    "model_type": "unet_dav2",
+    "input_channels": 5,
     "concentrator_base_channels": 32,
     "dav2_encoder": "vits",
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
