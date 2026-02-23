@@ -13,13 +13,13 @@ from datasets.utils import fetch_preprocessing
 from pprint import pprint
 from evaluation import add_to_metrics, prepare_target_data_torch
 from losses import normalized_depth_scale_and_shift
-from networks.concentration_dav2 import ConcentrationDav2
+from networks.unet_dav2 import UNetDav2
 from util import depth_to_colormap, save_image, save_rgb, save_voxelgrid, voxelgrid_to_uint8
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run ConcentrationDav2 on a DSEC sequence and visualize the concentrator output and depth."
+        description="Run UNetDav2 on a DSEC sequence and visualize the UNet output and depth."
     )
     parser.add_argument(
         "sequence",
@@ -44,7 +44,7 @@ def parse_args() -> argparse.Namespace:
         "--num-bins",
         type=int,
         default=5,
-        help="Number of bins for the voxel grid (matches concentrator input channels).",
+        help="Number of bins for the voxel grid (matches UNet input channels).",
     )
     parser.add_argument(
         "--dav2-checkpoint",
@@ -55,13 +55,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--concentrator-checkpoint",
         type=str,
-        default=os.path.join("output", "train_concentration_dav2", "epoch_001.pt"),
-        help="Optional checkpoint containing concentrator weights.",
+        default=os.path.join("output", "train_unet_dav2", "epoch_001.pt"),
+        help="Optional checkpoint containing UNet weights.",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="output/test_concentration_dav2_on_dsec",
+        default="output/test_unet_dav2_on_dsec",
         help="Where to save visualizations.",
     )
     return parser.parse_args()
@@ -180,7 +180,7 @@ def main() -> None:
     sample = dataset[args.index]
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
 
-    model = ConcentrationDav2(
+    model = UNetDav2(
         input_channels=args.num_bins,
         dav2_encoder="vits",
         dav2_checkpoint=args.dav2_checkpoint,
@@ -199,12 +199,12 @@ def main() -> None:
         concentrator_bytes = sum(t.numel() * t.element_size() for t in concentrator_state.values())
         dav2_bytes = sum(t.numel() * t.element_size() for k, t in state.items() if k.startswith("dav2."))
         print(f"Total weights size: {total_bytes / (1024 * 1024):.2f} MB")
-        print(f"Concentrator weights size: {concentrator_bytes / (1024 * 1024):.2f} MB")
+        print(f"UNet weights size: {concentrator_bytes / (1024 * 1024):.2f} MB")
         print(f"DAv2 weights size: {dav2_bytes / (1024 * 1024):.2f} MB")
         model.concentrator.load_state_dict(concentrator_state, strict=True)
 
     concentrator_params = sum(p.numel() for p in model.concentrator.parameters())
-    print(f"Concentrator parameters: {concentrator_params}")
+    print(f"UNet parameters: {concentrator_params}")
 
     concentrator_rgb = model.concentrator(events)
     depth_pred = model.dav2(concentrator_rgb).squeeze(1)
