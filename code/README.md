@@ -60,40 +60,40 @@ python -m evaluate --config-path configs/validation/e2vid_dav2_composite_voxelgr
 python -m evaluate --config-path configs/validation/etnet_dav2_voxelgrid.json --csv-path results/etnet_dav2_voxelgrid.csv
 ```
 
-### Concentration + DAv2
+### UNet + DAv2
 Evaluate the model
 ```bash
-python -m evaluate --config-path configs/validation/concentration_dav2_voxelgrid.json --csv-path results/concentration_dav2_voxelgrid.csv
+python -m evaluate --config-path configs/validation/unet_dav2.json --csv-path results/unet_dav2.csv
 ```
 
 Train the model
 
 ```bash
-python -m train_concentration_dav2 --config configs/train/concentration_dav2_voxelgrid.json --save-dir output/train_concentration_dav2
+python -m train_unet_dav2 --config configs/train/unet_dav2.json --save-dir output/train_unet_dav2
 ```
 
-### Concentration + DAv2 5 batch
+### UNet + DAv2 5 batch
 Evaluate the model
 ```bash
-python -m evaluate --config-path configs/validation/concentration_dav2_batch5.json --csv-path results/concentration_dav2_batch5.csv
+python -m evaluate --config-path configs/validation/unet_dav2_batch5.json --csv-path results/unet_dav2_batch5.csv
 ```
 
 Train the model
 
 ```bash
-python -m train_concentration_dav2 --config configs/train/concentration_dav2_voxelgrid_batch5.json --save-dir output/train_concentration_dav2_batch5
+python -m train_unet_dav2 --config configs/train/unet_dav2_batch5.json --save-dir output/train_unet_dav2_batch5
 ```
 
-### Concentration + DAv2 (on RGB)
+### UNet + DAv2 (on RGB)
 Evaluate the model
 ```bash
-python -m evaluate --config-path configs/validation/concentration_dav2_rgb.json --csv-path results/concentration_dav2_rgb.csv
+python -m evaluate --config-path configs/validation/unet_dav2_rgb.json --csv-path results/unet_dav2_rgb.csv
 ```
 
 Train the model
 
 ```bash
-python -m train_concentration_dav2_rgb --config configs/train/concentration_dav2_rgb.json --save-dir output/train_concentration_dav2_rgb
+python -m train_unet_dav2_rgb --config configs/train/unet_dav2_rgb.json --save-dir output/train_unet_dav2_rgb
 ```
 
 ## Notes
