@@ -24,8 +24,8 @@ class _ConvBlock(torch.nn.Module):
         return self.block(x)
 
 
-class SmallConcentrationUNet(torch.nn.Module):
-    """Small UNet-like concentrator mapping event tensors to 3-channel DAV2 input."""
+class SmallUNet(torch.nn.Module):
+    """Small UNet mapping event tensors to 3-channel DAV2 input."""
 
     def __init__(self, in_channels: int = 5, base_channels: int = 32) -> None:
         super().__init__()
@@ -51,10 +51,10 @@ class SmallConcentrationUNet(torch.nn.Module):
         return torch.sigmoid(self.out_conv(d1))
 
 
-class ConcentrationDav2(torch.nn.Module):
-    """Pipeline: events -> small UNet concentrator -> DAV2 depth.
+class UNetDav2(torch.nn.Module):
+    """Pipeline: events -> small UNet -> DAV2 depth.
 
-    The concentrator is trainable. DAV2 can be frozen/unfrozen with `freeze_dav2`.
+    The small UNet is trainable. DAV2 can be frozen/unfrozen with `freeze_dav2`.
     """
 
     def __init__(
@@ -75,7 +75,7 @@ class ConcentrationDav2(torch.nn.Module):
 
         self.vis_temp = None
 
-        self.concentrator = SmallConcentrationUNet(
+        self.concentrator = SmallUNet(
             in_channels=input_channels,
             base_channels=concentrator_base_channels,
         )
@@ -105,10 +105,10 @@ class ConcentrationDav2(torch.nn.Module):
 
         self.to(self.device)
 
-        print("[ConcentrationDav2] DAv2 checkpoint:", str(checkpoint_path))
-        print("[ConcentrationDav2] DAv2 encoder:", dav2_encoder)
-        print("[ConcentrationDav2] DAv2 frozen:", self.freeze_dav2)
-        print("[ConcentrationDav2] Device:", self.device)
+        print("[UNetDav2] DAv2 checkpoint:", str(checkpoint_path))
+        print("[UNetDav2] DAv2 encoder:", dav2_encoder)
+        print("[UNetDav2] DAv2 frozen:", self.freeze_dav2)
+        print("[UNetDav2] Device:", self.device)
 
 
     def set_dav2_frozen(self, freeze: bool = True) -> None:
