@@ -53,7 +53,7 @@ def parse_args() -> argparse.Namespace:
         help="DAV2 checkpoint path",
     )
     parser.add_argument(
-        "--concentrator-checkpoint",
+        "--unet-checkpoint",
         type=str,
         default=os.path.join("output", "train_unet_dav2", "epoch_001.pt"),
         help="Optional checkpoint containing UNet weights.",
@@ -81,7 +81,7 @@ def append_checkpoint_to_output_dir(output_dir: str, checkpoint_path: str) -> st
 
 def visualize(
     sample: dict,
-    concentrator_rgb: torch.Tensor,
+    unet_rgb: torch.Tensor,
     pred_np: np.ndarray,
     pred_np_raw: np.ndarray,
     target_np: np.ndarray,
@@ -89,7 +89,7 @@ def visualize(
     idx: int,
 ) -> None:
     events_voxel = sample["depth_aligned_events"][0]
-    concentrator_rgb = concentrator_rgb[0]
+    unet_rgb = unet_rgb[0]
 
     pred_raw_rgb = depth_to_colormap(pred_np_raw)
     pred_rgb = depth_to_colormap(pred_np)
@@ -116,7 +116,7 @@ def visualize(
     events_uint8 = voxelgrid_to_uint8(events_voxel)
     grid_items = [
         ("Events", events_uint8, None),
-        ("Concentrator", concentrator_rgb.permute(1, 2, 0).detach().cpu().numpy(), None),
+        ("UNet RGB", unet_rgb.permute(1, 2, 0).detach().cpu().numpy(), None),
         ("Pred (raw)", pred_np_raw, ("viridis", pred_raw_min, pred_raw_max)),
         ("Pred (scaled)", pred_np, ("viridis", pred_min, pred_max)),
         ("GT", target_np, ("viridis", gt_min, gt_max)),
@@ -124,7 +124,7 @@ def visualize(
     ]
 
     save_voxelgrid(os.path.join(out_dir, f"{idx:05d}_events.png"), events_voxel)
-    save_rgb(os.path.join(out_dir, f"{idx:05d}_concentrator_rgb.png"), concentrator_rgb)
+    save_rgb(os.path.join(out_dir, f"{idx:05d}_unet_rgb.png"), unet_rgb)
     save_image(os.path.join(out_dir, f"{idx:05d}_pred_raw_depth.png"), pred_raw_rgb)
     save_image(os.path.join(out_dir, f"{idx:05d}_pred_scaled_depth.png"), pred_rgb)
     save_image(os.path.join(out_dir, f"{idx:05d}_gt_depth.png"), gt_rgb)
@@ -150,7 +150,7 @@ def visualize(
 def main() -> None:
     args = parse_args()
     out_dir = ensure_dir(
-        append_checkpoint_to_output_dir(args.output_dir, args.concentrator_checkpoint)
+        append_checkpoint_to_output_dir(args.output_dir, args.unet_checkpoint)
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -187,27 +187,27 @@ def main() -> None:
         device=device,
     )
 
-    if args.concentrator_checkpoint:
-        ckpt = torch.load(args.concentrator_checkpoint, map_location="cpu")
+    if args.unet_checkpoint:
+        ckpt = torch.load(args.unet_checkpoint, map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
-        concentrator_state = {
+        unet_state = {
             k.replace("concentrator.", ""): v
             for k, v in state.items()
             if k.startswith("concentrator.")
         }
         total_bytes = sum(t.numel() * t.element_size() for t in state.values())
-        concentrator_bytes = sum(t.numel() * t.element_size() for t in concentrator_state.values())
+        unet_bytes = sum(t.numel() * t.element_size() for t in unet_state.values())
         dav2_bytes = sum(t.numel() * t.element_size() for k, t in state.items() if k.startswith("dav2."))
         print(f"Total weights size: {total_bytes / (1024 * 1024):.2f} MB")
-        print(f"UNet weights size: {concentrator_bytes / (1024 * 1024):.2f} MB")
+        print(f"UNet weights size: {unet_bytes / (1024 * 1024):.2f} MB")
         print(f"DAv2 weights size: {dav2_bytes / (1024 * 1024):.2f} MB")
-        model.concentrator.load_state_dict(concentrator_state, strict=True)
+        model.unet.load_state_dict(unet_state, strict=True)
 
-    concentrator_params = sum(p.numel() for p in model.concentrator.parameters())
-    print(f"UNet parameters: {concentrator_params}")
+    unet_params = sum(p.numel() for p in model.unet.parameters())
+    print(f"UNet parameters: {unet_params}")
 
-    concentrator_rgb = model.concentrator(events)
-    depth_pred = model.dav2(concentrator_rgb).squeeze(1)
+    unet_rgb = model.unet(events)
+    depth_pred = model.dav2(unet_rgb).squeeze(1)
     depth_pred = 1.0 / (depth_pred + 1.0)
 
     target_depth_t = sample["depth"][0].to(device)
@@ -241,7 +241,7 @@ def main() -> None:
     }
     pprint(metrics_filtered)
 
-    visualize(sample, concentrator_rgb, pred_np, pred_np_raw, target_np, out_dir, args.index)
+    visualize(sample, unet_rgb, pred_np, pred_np_raw, target_np, out_dir, args.index)
     print(f"Saved outputs to {out_dir}")
 
 

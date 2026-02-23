@@ -85,7 +85,7 @@ def setup_device_and_seeds(seed: int) -> torch.device:
 def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDav2:
     return UNetDav2(
         input_channels=int(model_config.get("input_channels", 5)),
-        concentrator_base_channels=int(model_config.get("concentrator_base_channels", 32)),
+        unet_base_channels=int(model_config.get("unet_base_channels", 32)),
         dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
         dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
         input_size_width=int(model_config.get("input_size_width", 350)),
@@ -113,25 +113,25 @@ def save_visualization(
     seq_name: str,
     epoch: int,
     step: int,
-    concentrator_rgb: torch.Tensor,
+    unet_rgb: torch.Tensor,
     depth: torch.Tensor,
 ) -> None:
     vis_dir = os.path.join(save_dir, "visualizations")
     os.makedirs(vis_dir, exist_ok=True)
 
     rgb_path = os.path.join(
-        vis_dir, f"{seq_name}_epoch_{epoch:03d}_step_{step:06d}_concentrator.png"
+        vis_dir, f"{seq_name}_epoch_{epoch:03d}_step_{step:06d}_unet.png"
     )
     depth_path = os.path.join(
         vis_dir, f"{seq_name}_epoch_{epoch:03d}_step_{step:06d}_depth.png"
     )
 
-    if concentrator_rgb.shape[0] > 1:
+    if unet_rgb.shape[0] > 1:
         # If batch dimension exists, take the first sample for visualization.
-        save_rgb(rgb_path, concentrator_rgb[0].detach().cpu().squeeze(0))
+        save_rgb(rgb_path, unet_rgb[0].detach().cpu().squeeze(0))
         save_depth_colormap(depth_path, depth[0].detach().cpu().squeeze(0))
     else:
-        save_rgb(rgb_path, concentrator_rgb.detach().cpu().squeeze(0))
+        save_rgb(rgb_path, unet_rgb.detach().cpu().squeeze(0))
         save_depth_colormap(depth_path, depth.detach().cpu().squeeze(0))
 
 
@@ -187,7 +187,7 @@ def train_epoch(
                     seq_name=seq_name,
                     epoch=epoch,
                     step=step,
-                    concentrator_rgb=model.vis_temp,
+                    unet_rgb=model.vis_temp,
                     depth=pred_depth,
                 )
             step += 1
@@ -240,12 +240,12 @@ def main() -> None:
         if os.path.isfile(resume_path):
             ckpt = torch.load(resume_path, map_location="cpu")
             state = ckpt.get("model_state_dict", ckpt)
-            concentrator_state = {
+            unet_state = {
                 k.replace("concentrator.", ""): v
                 for k, v in state.items()
                 if k.startswith("concentrator.")
             }
-            model.concentrator.load_state_dict(concentrator_state, strict=True)
+            model.unet.load_state_dict(unet_state, strict=True)
             if "optimizer_state_dict" in ckpt:
                 optimizer.load_state_dict(ckpt["optimizer_state_dict"])
             if "epoch" in ckpt:

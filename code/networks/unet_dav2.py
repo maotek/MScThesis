@@ -60,7 +60,7 @@ class UNetDav2(torch.nn.Module):
     def __init__(
         self,
         input_channels: int = 5,
-        concentrator_base_channels: int = 32,
+        unet_base_channels: int = 32,
         dav2_encoder: str = "vits",
         dav2_checkpoint: Optional[str] = None,
         input_size_width: int = 350,
@@ -75,9 +75,9 @@ class UNetDav2(torch.nn.Module):
 
         self.vis_temp = None
 
-        self.concentrator = SmallUNet(
+        self.unet = SmallUNet(
             in_channels=input_channels,
-            base_channels=concentrator_base_channels,
+            base_channels=unet_base_channels,
         )
 
         if dav2_checkpoint is None:
@@ -120,11 +120,11 @@ class UNetDav2(torch.nn.Module):
         assert events.dim() == 4 and events.shape[1] == self.in_channels, f"Expected events of shape (B,{self.in_channels},H,W)"
 
         events = events.to(self.device)
-        concentrator_rgb = self.concentrator(events)
+        unet_rgb = self.unet(events)
 
         if True:
-            self.vis_temp = concentrator_rgb.detach().cpu()
+            self.vis_temp = unet_rgb.detach().cpu()
 
-        depth = self.dav2(concentrator_rgb)
+        depth = self.dav2(unet_rgb)
             
         return depth
