@@ -5,11 +5,11 @@
     "split": "validation",
     "concatenate_sequences": false,
     "event_representation": {
-      "representation_type": "voxelgrid",
-      "channels": 5,
+      "representation_type": "rgb",
+      "normalize": true,
+      "white_frame": false,
       "height": 480,
-      "width": 640,
-      "normalize": true
+      "width": 640
     },
     "preprocessing": [
       {
@@ -18,7 +18,7 @@
         "width": 640
       }
     ],
-    "load_images": false,
+    "load_images": true,
     "batch_size": 1,
     "num_workers": 1,
     "pin_memory": true,
@@ -28,8 +28,8 @@
     "time_window_ms": 50
   },
   "model": {
-    "model_type": "concentration_dav2",
-    "input_channels": 5,
+    "model_type": "concentration_dav2_rgb",
+    "input_channels": 3,
     "concentrator_base_channels": 32,
     "dav2_encoder": "vits",
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
@@ -38,7 +38,7 @@
     "freeze_dav2": true
   },
   "vis_interval": 200,
-  "vis_dir": "output/evaluate_concentration_dav2_voxelgrid",
+  "vis_dir": "output/evaluate_concentration_dav2_rgb",
   "use_scaleshift": true,
   "clip_distance": 80.0
 }
