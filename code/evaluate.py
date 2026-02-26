@@ -15,6 +15,7 @@ from datasets.events.events_representations import E2vidVoxelGrid
 from networks.dae import DAE
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.dsec_dataset import fetch_dataloader as fetch_dsec_dataloader
+from datasets.MVSEC.mvsec_dataset import fetch_dataloader as fetch_mvsec_dataloader
 from datasets.events import Tencode, TencodePixelCount, VoxelGrid, ETNetVoxelGrid
 from networks.dav2 import Dav2
 from networks.e2vid_dav2 import E2VIDDav2
@@ -360,7 +361,11 @@ def main() -> None:
 
     metrics_sequence_dict: Dict[str, Dict[str, float]] = {}
     seq_results = []
-    data_loaders_dict = fetch_dsec_dataloader(data_loader_config, test=True)
+
+    if data_loader_config.get("dataset", "").lower() == "mvsec":
+        data_loaders_dict = fetch_mvsec_dataloader(data_loader_config, test=True)
+    elif data_loader_config.get("dataset", "").lower() == "dsec":
+        data_loaders_dict = fetch_dsec_dataloader(data_loader_config, test=True)
 
     for seq_name, data_loader in data_loaders_dict.items():
         metrics_sum, frames = evaluate_sequence(
