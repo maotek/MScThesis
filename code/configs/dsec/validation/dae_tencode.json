@@ -36,7 +36,8 @@
     "input_size_height": 266,
     "input_channels": 3,
     "freeze_encoder": false,
-    "nopretrain": false
+    "nopretrain": false,
+    "checkpoint": "models/depthanyevent/weights/dav2/finetuned_dsec/finetuned_dsec.pth"
   },
   "vis_interval": 200,
   "vis_dir": "output/evaluate_dae_tencode",

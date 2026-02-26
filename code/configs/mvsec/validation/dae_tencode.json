@@ -1,0 +1,46 @@
+{
+  "data_loader": {
+    "dataset": "mvsec",
+    "datapath": "datasets/MVSEC/data",
+    "split": "test",
+    "concatenate_sequences": false,
+    "event_representation": {
+      "representation_type": "tencode",
+      "normalize": true,
+      "white_frame": false,
+      "height": 260,
+      "width": 346
+    },
+    "preprocessing": [
+      {
+        "preprocessing_type": "Crop",
+        "height": 260,
+        "width": 346
+      }
+    ],
+    "load_images": false,
+    "batch_size": 1,
+    "num_workers": 1,
+    "pin_memory": true,
+    "shuffle": false,
+    "sequence_window": 1,
+    "sequence_step": 1,
+    "time_window_ms": 50
+  },
+  "model": {
+    "model_type": "dae",
+    "activation": "relu",
+    "inv_prediction": true,
+    "scale_factor": 1.0,
+    "input_size_width": 350,
+    "input_size_height": 266,
+    "input_channels": 3,
+    "freeze_encoder": false,
+    "nopretrain": false,
+    "checkpoint": "models/depthanyevent/weights/dav2/finetuned_mvsec/finetuned_mvsec.pth"
+  },
+  "vis_interval": 200,
+  "vis_dir": "output/evaluate_dae_tencode_MVSEC",
+  "use_scaleshift": true,
+  "clip_distance": 80.0
+}
