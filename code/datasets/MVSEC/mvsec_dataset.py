@@ -1,30 +1,25 @@
-"""
-DSEC dataset loader utilities (aligned with depthanyevent dataloader style).
-"""
-
 import os
-import random
-from typing import Any, Dict, Optional
-
+from typing import Dict, List, Tuple, Type, Optional, Any
 from pprint import pprint
-
-import numpy as np
+from tqdm import tqdm
 import torch
-from torch.utils.data import Dataset
+import h5py
+import hdf5plugin
+import random
+import numpy as np
+from torch.utils.data import Dataset, ConcatDataset
 
-from .constants import DSEC_HEIGHT, DSEC_WIDTH
-from .sbt.dsec_sequence import DsecSequence
-from ..events import (
-    E2vidVoxelGrid,
-    ETNetVoxelGrid,
-    EventRepresentation,
-    Histogram,
-    Tencode,
-    TencodePixelCount,
-    VoxelGrid,
-)
-from ..events import fetch_event_representation
+from .sbt.mvsec_sequence import MVSECSequence
+from ..events import EventRepresentation, fetch_event_representation
 from ..utils import Augmentator, fetch_preprocessing
+from .constants import (
+    MVSEC_HEIGHT,
+    MVSEC_WIDTH, 
+    MVSEC_TRAIN,
+    MVSEC_TEST,
+    MVSEC_VALIDATION,
+    MVSEC_ALL_DATA_FOLDERS,
+)
 
 
 def worker_init_fn(worker_id: int) -> None:
@@ -35,56 +30,65 @@ def worker_init_fn(worker_id: int) -> None:
     np.random.seed(torch_seed + worker_id)
 
 
+
 def load_datasets(
-    dsec_path: str,
+    mvsec_path: str,
     data_split: str,
-    time_window_ms: Optional[int],
     event_representation: EventRepresentation,
     augmentator: Optional[Augmentator],
     load_images: bool = False,
+    overfit: bool = False,
     sequence_window: int = 1,
     sequence_step: int = 1,
     self_supervised: bool = False,
     postfix: str = "",
+    time_window_ms: int = 50,
 ) -> Dict[str, Dataset]:
-    """
-    Create one dataset per DSEC sequence directory (depthanyevent-compatible style).
-    """
-
-    time_window_ms = time_window_ms if time_window_ms is not None else 50
-    split_path = dsec_path + os.path.sep + data_split
-
-    if not os.path.exists(split_path):
-        raise FileNotFoundError(f"Split path does not exist: {split_path}")
-
-    sequence_names = sorted(
-        entry
-        for entry in os.listdir(split_path)
-        if os.path.isdir(os.path.join(split_path, entry))
+    # Validate input parameters
+    assert data_split in ["train", "validation", "test"], (
+        f"Invalid data_split '{data_split}'. Must be one of: train, validation, test"
     )
-    if not sequence_names:
-        raise FileNotFoundError(f"No sequence folders found in split path: {split_path}")
 
+    print(f"Loading MVSEC dataset from: {mvsec_path}")
+    print(f"Data split: {data_split}, Load images: {load_images}")
+
+    # Determine sequences to load based on data split
+    if data_split == "train":
+        data_folders = MVSEC_TRAIN
+    elif data_split == "validation":
+        data_folders = MVSEC_VALIDATION
+    elif data_split == "test":
+        data_folders = MVSEC_TEST
+    else:
+        raise Exception(f"Unrecognized data_split: {data_split}")
+
+    # Load and validate dataset sequences
     datasets: Dict[str, Dataset] = {}
-    for sequence_name in sequence_names:
-        sequence_path = os.path.join(split_path, sequence_name)
-        datasets[sequence_name] = DsecSequence(
+
+    for folder_name in data_folders.keys():
+        # Create primary sequence dataset
+        sequence_path = os.path.join(mvsec_path, folder_name)
+        
+        datasets[folder_name] = MVSECSequence(
             sequence_path=sequence_path,
             event_representation=event_representation,
+            time_window_ms=time_window_ms,
             augmentator=augmentator,
             load_images=load_images,
+            overfit=overfit,
             sequence_window=sequence_window,
             sequence_step=sequence_step,
+            split=data_split,
             self_supervised=self_supervised,
             postfix=postfix,
-            time_window_ms=time_window_ms,
         )
+
     return datasets
 
 
 def fetch_dataloader(config_dataloader: Dict[str, Any], test: bool = False):
     """
-    Build DSEC DataLoader dict.
+    Build MVSEC DataLoader dict.
     """
     if "datapath" in config_dataloader:
         datapath = config_dataloader["datapath"]
@@ -112,9 +116,8 @@ def fetch_dataloader(config_dataloader: Dict[str, Any], test: bool = False):
     event_representation = fetch_event_representation(ev_config)
 
     datasets = load_datasets(
-        dsec_path=datapath,
+        mvsec_path=datapath,
         data_split=datasplit,
-        time_window_ms=time_window_ms,
         event_representation=event_representation,
         augmentator=augmentator,
         load_images=load_images,
@@ -122,6 +125,7 @@ def fetch_dataloader(config_dataloader: Dict[str, Any], test: bool = False):
         sequence_step=sequence_step,
         self_supervised=self_supervised,
         postfix=postfix,
+        time_window_ms=time_window_ms,
     )
     print(len(datasets), "sequences loaded.")
     for key in datasets:
