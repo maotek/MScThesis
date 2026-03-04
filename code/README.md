@@ -45,6 +45,11 @@ Test on MVSEC using the MVSEC weights
 python -m evaluate --config-path configs/mvsec/validation/dae_tencode.json --csv-path results/dae_tencode_MVSEC.csv
 ```
 
+Test on MVSEC using the DSEC weights
+```bash
+python -m evaluate --config-path configs/mvsec/validation/dae_tencode_DSEC_checkpoint.json --csv-path results/dae_tencode_MVSEC_on_DSEC_checkpoint.csv
+```
+
 ### DAV2 + RGB
 ```bash
 python -m evaluate --config-path configs/dsec/validation/dav2_rgb.json --csv-path results/dav2_rgb.csv
@@ -69,6 +74,16 @@ python -m evaluate --config-path configs/dsec/validation/etnet_dav2_voxelgrid.js
 Evaluate the model
 ```bash
 python -m evaluate --config-path configs/dsec/validation/unet_dav2.json --csv-path results/unet_dav2.csv
+```
+
+Evaluate the model (trained on DSEC) on MVSEC
+```bash
+python -m evaluate --config-path configs/mvsec/validation/unet_dav2.json --csv-path results/unet_dav2_MVSEC.csv
+```
+
+Evaluate the model with batch 5 (trained on DSEC) on MVSEC
+```bash
+python -m evaluate --config-path configs/mvsec/validation/unet_dav2_batch5.json --csv-path results/unet_dav2_MVSEC_batch5.csv
 ```
 
 Train the model
