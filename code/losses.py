@@ -341,7 +341,8 @@ class MultiScaleGradient(torch.nn.Module):
             _downsampled_valid_mask = F.interpolate(valid_mask.float(), (delta_diff.shape[-2], delta_diff.shape[-1]), mode='nearest').bool().unsqueeze(1)
             mask_sum = ((~is_nan) & _downsampled_valid_mask).sum()
             # output of kornia spatial gradient is [B x C x 2 x H x W]
-            loss_value += torch.abs(delta_diff[(~is_nan) & _downsampled_valid_mask]).sum()/mask_sum*target.shape[0]*2
+            # loss_value += torch.abs(delta_diff[(~is_nan) & _downsampled_valid_mask]).sum()/mask_sum*target.shape[0]*2
+            loss_value += torch.abs(delta_diff[(~is_nan) & _downsampled_valid_mask]).sum() / mask_sum * 2 # Ensure loss is averaged over batch samples
 
         return (loss_value/self.num_scales)*self.weight
 
