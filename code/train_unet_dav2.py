@@ -9,11 +9,13 @@ import torch
 import tqdm
 
 from util import save_depth_colormap, save_rgb
+from train_validation import validate_epoch
 from wandb_logging import (
     finish_training_wandb,
     init_training_wandb,
     log_train_epoch,
     log_train_step,
+    log_validation_epoch,
 )
 
 from datasets.DSEC.dsec_dataset import fetch_dataloader as fetch_dsec_dataloader
@@ -271,6 +273,21 @@ def main() -> None:
             )
             print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
             log_train_epoch(avg_loss=avg_loss, epoch=epoch)
+            val_metrics = validate_epoch(
+                model=model,
+                dataset_path=str(data_loader_config["datapath"]),
+                data_loader_config=data_loader_config,
+                device=device,
+                clip_distance=args.clip_distance,
+                ssi_loss=ssi_loss,
+                grad_loss=grad_loss,
+                input_key="depth_aligned_events",
+            )
+            print(
+                f"Epoch {epoch} validation | loss {val_metrics['loss']:.6f} | "
+                f"abs_rel {val_metrics['abs_rel_diff']:.6f}"
+            )
+            log_validation_epoch(metrics=val_metrics, epoch=epoch)
 
             if args.save_every > 0 and epoch % args.save_every == 0:
                 save_checkpoint(args.save_dir, epoch, model, optimizer)
