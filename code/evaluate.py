@@ -116,6 +116,7 @@ def save_visualization(
     events: torch.Tensor,
     pred_np: np.ndarray,
     vis_dir: str,
+    vis_temp: torch.Tensor = None,
 ) -> None:
     seq_dir = os.path.join(vis_dir, seq_name)
     os.makedirs(seq_dir, exist_ok=True)
@@ -128,6 +129,8 @@ def save_visualization(
         save_voxelgrid(events_path, events_chw)
 
     save_depth_colormap(os.path.join(seq_dir, f"{idx:05d}_pred.png"), pred_np)
+    if vis_temp is not None:
+        save_rgb(os.path.join(seq_dir, f"{idx:05d}_vis_temp.png"), vis_temp.detach().cpu().squeeze(0))
 
 
 def evaluate_sequence(
@@ -206,6 +209,7 @@ def evaluate_sequence(
                 events=events,
                 pred_np=pred_depth.detach().cpu().squeeze().numpy(),
                 vis_dir=vis_dir,
+                vis_temp=getattr(model, "vis_temp", None) if model_name in ("unet_dav2", "unet_dav2_rgb") else None,
             )
 
         for depth_threshold in (10, 20, 30):
