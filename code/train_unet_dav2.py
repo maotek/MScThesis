@@ -43,7 +43,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--resume-checkpoint",
         type=str,
-        # default=os.path.join("output", "train_unet_dav2", "epoch_050.pt"),
+        # default=os.path.join("output", "train_unet_dav2", "epoch_003.pt"),
         help="Checkpoint to resume from; set to empty string to disable.",
     )
     parser.add_argument("--ssi-alpha", type=float, default=0.0, help="Scale-and-shift loss alpha term.")
@@ -285,7 +285,7 @@ def main() -> None:
             )
             print(
                 f"Epoch {epoch} validation | loss {val_metrics['loss']:.6f} | "
-                f"abs_rel {val_metrics['abs_rel_diff']:.6f}"
+                f"abs_rel {val_metrics['_abs_rel_diff']:.6f}"
             )
             log_validation_epoch(metrics=val_metrics, epoch=epoch)
 

@@ -58,16 +58,17 @@ def log_train_epoch(avg_loss: float, epoch: int) -> None:
 
 
 def log_validation_epoch(metrics: Dict[str, float], epoch: int) -> None:
-    wandb.log(
-        {
-            "validation/loss": metrics["loss"],
-            "validation/loss_ssi": metrics["loss_ssi"],
-            "validation/loss_grad": metrics["loss_grad"],
-            "validation/abs_rel_diff": metrics["abs_rel_diff"],
-            "validation/frames": metrics["frames"],
-            "validation/epoch": epoch,
-        }
-    )
+    payload = {
+        "validation/loss": metrics["loss"],
+        "validation/loss_ssi": metrics["loss_ssi"],
+        "validation/loss_grad": metrics["loss_grad"],
+        "validation/_abs_rel_diff": metrics.get("_abs_rel_diff", 0.0),
+        "validation/_RMS_linear": metrics.get("_RMS_linear", 0.0),
+        "validation/_threshold_delta_1.25": metrics.get("_threshold_delta_1.25", 0.0),
+        "validation/frames": metrics["frames"],
+        "validation/epoch": epoch,
+    }
+    wandb.log(payload)
 
 
 def finish_training_wandb() -> None:
