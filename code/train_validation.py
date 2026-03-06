@@ -5,6 +5,7 @@ import torch
 import tqdm
 
 from datasets.DSEC.dsec_dataset import fetch_dataloader as fetch_dsec_dataloader
+from datasets.MVSEC.mvsec_dataset import fetch_dataloader as fetch_mvsec_dataloader
 from evaluation import add_to_metrics, prepare_target_data_torch
 from losses import normalized_depth_scale_and_shift
 
@@ -20,8 +21,9 @@ def validate_epoch(
     grad_loss: torch.nn.Module,
     input_key: str,
 ) -> Dict[str, float]:
-    if str(data_loader_config.get("dataset", "")).lower() != "dsec":
-        raise ValueError("validate_epoch currently supports only the DSEC dataset.")
+    dataset_name = str(data_loader_config.get("dataset", "")).lower()
+    if dataset_name not in ("dsec", "mvsec"):
+        raise ValueError(f"validate_epoch does not support dataset '{dataset_name}'.")
 
     validation_config = dict(data_loader_config)
     validation_config["datapath"] = dataset_path
@@ -29,7 +31,10 @@ def validate_epoch(
     validation_config["shuffle"] = False
     validation_config["batch_size"] = 1
 
-    dataloaders = fetch_dsec_dataloader(validation_config, test=True)
+    if dataset_name == "dsec":
+        dataloaders = fetch_dsec_dataloader(validation_config, test=True)
+    else:
+        dataloaders = fetch_mvsec_dataloader(validation_config, test=True)
 
     model.eval()
     total_loss = 0.0

@@ -19,6 +19,7 @@ from wandb_logging import (
 )
 
 from datasets.DSEC.dsec_dataset import fetch_dataloader as fetch_dsec_dataloader
+from datasets.MVSEC.mvsec_dataset import fetch_dataloader as fetch_mvsec_dataloader
 from evaluation import prepare_target_data_torch
 from losses import MultiScaleGradient, ScaleAndShiftInvariantLoss
 from networks.unet_dav2 import UNetDav2
@@ -43,7 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--resume-checkpoint",
         type=str,
-        # default=os.path.join("output", "train_unet_dav2", "epoch_003.pt"),
+        # default=os.path.join("output", "train_unet_dav2", "epoch_050.pt"),
         help="Checkpoint to resume from; set to empty string to disable.",
     )
     parser.add_argument("--ssi-alpha", type=float, default=0.0, help="Scale-and-shift loss alpha term.")
@@ -210,7 +211,13 @@ def main() -> None:
 
     data_loader_config, model_config = load_config(args.config_path)
 
-    dataloaders = fetch_dsec_dataloader(data_loader_config, test=False)
+    dataset_name = str(data_loader_config.get("dataset", "")).lower()
+    if dataset_name == "dsec":
+        dataloaders = fetch_dsec_dataloader(data_loader_config, test=False)
+    elif dataset_name == "mvsec":
+        dataloaders = fetch_mvsec_dataloader(data_loader_config, test=False)
+    else:
+        raise ValueError(f"Unsupported dataset in config: {dataset_name}")
     model = build_model(model_config, device)
 
     ssi_loss = ScaleAndShiftInvariantLoss(
