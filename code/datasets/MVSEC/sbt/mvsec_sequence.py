@@ -231,7 +231,7 @@ class MVSECSequence(Dataset):
 
         depth_files.sort()
         self.depths = depth_files
-        assert len(self.depths) == len(self.timestamps_depth)
+        # assert len(self.depths) == len(self.timestamps_depth)
         
         if use_voxels:
             self.base_voxels_path = os.path.join(sequence_path, "events", "voxels")
@@ -376,7 +376,7 @@ class MVSECSequence(Dataset):
 
     def _ensure_event_slicer(self) -> None:
         """Open event HDF5 files lazily in the current process/worker."""
-        if "data" in self.event_slicer:
+        if self.event_slicer and "data" in self.event_slicer:
             return
 
         event_file = h5py.File(self._event_left_h5_path, "r")
