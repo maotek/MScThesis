@@ -167,6 +167,9 @@ class MVSECSequence(Dataset):
         event_data_hdf5_path = os.path.join(sequence_path, "hdf5", "data.hdf5")
         self.event_data_hdf5_exists = os.path.isfile(event_data_hdf5_path)
         self._event_left_h5_path = event_data_hdf5_path
+        self._h5_event_files = {}
+        self.event_slicer = {}
+        self._finalizer = None
 
         # Force voxel mode if raw events are not available
         if not self.event_data_hdf5_exists and not use_voxels:
@@ -376,7 +379,7 @@ class MVSECSequence(Dataset):
 
     def _ensure_event_slicer(self) -> None:
         """Open event HDF5 files lazily in the current process/worker."""
-        if self.event_slicer and "data" in self.event_slicer:
+        if getattr(self, "event_slicer", None) and "data" in self.event_slicer:
             return
 
         event_file = h5py.File(self._event_left_h5_path, "r")
