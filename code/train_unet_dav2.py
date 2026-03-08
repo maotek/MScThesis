@@ -89,6 +89,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
     return UNetDav2(
         input_channels=int(model_config.get("input_channels", 5)),
         unet_base_channels=int(model_config.get("unet_base_channels", 32)),
+        unet_type=str(model_config.get("unet_type", "small")),
         dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
         dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
         input_size_width=int(model_config.get("input_size_width", 350)),
