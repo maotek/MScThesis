@@ -2,7 +2,7 @@ MVSEC_HEIGHT = 260
 MVSEC_WIDTH = 346
 
 MVSEC_TRAIN = {
-    "train/dataset_day2/train":8524, "train/dataset_day2/validation":1827, 
+    "train/outdoor_day2":8524,
 }
 
 MVSEC_VALIDATION = {
