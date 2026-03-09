@@ -36,10 +36,10 @@
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true,
-    "checkpoint_path": "output/train_unet_dav2_batch5/epoch_050.pt"
+    "checkpoint_path": "output/train_unet_dav2_batch10/epoch_050.pt"
   },
   "vis_interval": 200,
-  "vis_dir": "output/evaluate_unet_dav2_MVSEC_batch5",
+  "vis_dir": "output/evaluate_unet_dav2_MVSEC_batch10",
   "use_scaleshift": true,
   "clip_distance": 80.0
 }

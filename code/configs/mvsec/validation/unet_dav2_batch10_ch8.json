@@ -30,16 +30,16 @@
   "model": {
     "model_type": "unet_dav2",
     "input_channels": 5,
-    "unet_base_channels": 32,
+    "unet_base_channels": 8,
     "dav2_encoder": "vits",
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true,
-    "checkpoint_path": "output/train_unet_dav2_batch5/epoch_050.pt"
+    "checkpoint_path": "output/train_unet_dav2_batch10_ch8/epoch_050.pt"
   },
   "vis_interval": 200,
-  "vis_dir": "output/evaluate_unet_dav2_MVSEC_batch5",
+  "vis_dir": "output/evaluate_unet_dav2_MVSEC_batch10_ch8",
   "use_scaleshift": true,
   "clip_distance": 80.0
 }
