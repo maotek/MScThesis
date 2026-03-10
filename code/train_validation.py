@@ -29,7 +29,7 @@ def validate_epoch(
 
     validation_config = dict(data_loader_config)
     validation_config["datapath"] = dataset_path
-    validation_config["split"] = "validation"
+    validation_config["split"] = "test" if dataset_name == "mvsec" else "validation"
     validation_config["shuffle"] = False
     validation_config["batch_size"] = 1
 
