@@ -59,6 +59,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grad-start-scale", type=int, default=1, help="MultiScaleGradient start scale.")
     parser.add_argument("--grad-num-scales", type=int, default=4, help="MultiScaleGradient number of scales.")
     parser.add_argument("--grad-weight", type=float, default=1.0, help="MultiScaleGradient weight.")
+    parser.add_argument(
+        "--no-grad-loss",
+        action="store_true",
+        default=False,
+        help="Disable MultiScaleGradient term in loss.",
+    )
+    parser.add_argument(
+        "--delta",
+        type=float,
+        default=1.0,
+        help="Scale factor for grad loss in total loss: ssi_loss + delta * grad_loss.",
+    )
     return parser.parse_args()
 
 
@@ -150,6 +162,8 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     log_interval: int,
     save_dir: str,
+    no_grad_loss: bool,
+    delta: float,
 ) -> float:
     model.train()
     running_loss = 0.0
@@ -170,8 +184,13 @@ def train_epoch(
                 continue
 
             loss_ssi = ssi_loss(pred_depth, target_proc_t, valid_mask)
-            loss_grad = grad_loss(pred_depth, target_proc_t.unsqueeze(1), valid_mask.unsqueeze(1))
-            loss = loss_ssi + loss_grad
+            if no_grad_loss:
+                loss_grad_value = 0.0
+                loss = loss_ssi
+            else:
+                loss_grad = grad_loss(pred_depth, target_proc_t.unsqueeze(1), valid_mask.unsqueeze(1))
+                loss_grad_value = loss_grad.item()
+                loss = loss_ssi + delta * loss_grad
 
             optimizer.zero_grad()
             loss.backward()
@@ -181,7 +200,7 @@ def train_epoch(
             log_train_step(
                 loss=loss.item(),
                 loss_ssi=loss_ssi.item(),
-                loss_grad=loss_grad.item(),
+                loss_grad=loss_grad_value,
                 epoch=epoch,
             )
 
@@ -200,7 +219,7 @@ def train_epoch(
                 avg_loss = running_loss / float(step)
                 print(
                     f"Epoch {epoch} | step {step} | loss {avg_loss:.6f} | "
-                    f"ssi {loss_ssi.item():.6f} | grad {loss_grad.item():.6f}"
+                    f"ssi {loss_ssi.item():.6f} | grad {loss_grad_value:.6f}"
                 )
 
     return running_loss / float(max(step, 1))
@@ -278,6 +297,8 @@ def main() -> None:
                 optimizer=optimizer,
                 log_interval=args.log_interval,
                 save_dir=args.save_dir,
+                no_grad_loss=args.no_grad_loss,
+                delta=args.delta,
             )
             print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
             log_train_epoch(avg_loss=avg_loss, epoch=epoch)
@@ -290,6 +311,8 @@ def main() -> None:
                 ssi_loss=ssi_loss,
                 grad_loss=grad_loss,
                 input_key="depth_aligned_events",
+                no_grad_loss=args.no_grad_loss,
+                delta=args.delta,
             )
             print(
                 f"Epoch {epoch} validation | loss {val_metrics['loss']:.6f} | "

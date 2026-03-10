@@ -20,6 +20,8 @@ def validate_epoch(
     ssi_loss: torch.nn.Module,
     grad_loss: torch.nn.Module,
     input_key: str,
+    no_grad_loss: bool = False,
+    delta: float = 1.0,
 ) -> Dict[str, float]:
     dataset_name = str(data_loader_config.get("dataset", "")).lower()
     if dataset_name not in ("dsec", "mvsec"):
@@ -60,12 +62,17 @@ def validate_epoch(
                 continue
 
             loss_ssi = ssi_loss(pred_depth, target_proc_t, valid_mask)
-            loss_grad = grad_loss(pred_depth, target_proc_t.unsqueeze(1), valid_mask.unsqueeze(1))
-            loss = loss_ssi + loss_grad
+            if no_grad_loss:
+                loss_grad_value = 0.0
+                loss = loss_ssi
+            else:
+                loss_grad = grad_loss(pred_depth, target_proc_t.unsqueeze(1), valid_mask.unsqueeze(1))
+                loss_grad_value = loss_grad.item()
+                loss = loss_ssi + delta * loss_grad
 
             total_loss += loss.item()
             total_loss_ssi += loss_ssi.item()
-            total_loss_grad += loss_grad.item()
+            total_loss_grad += loss_grad_value
             total_batches += 1
 
             pred_depth_for_metrics = pred_depth.squeeze(1)
