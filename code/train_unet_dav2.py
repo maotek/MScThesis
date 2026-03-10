@@ -71,6 +71,12 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="Scale factor for grad loss in total loss: ssi_loss + delta * grad_loss.",
     )
+    parser.add_argument(
+        "--no-validation",
+        action="store_true",
+        default=False,
+        help="Disable validation after each epoch.",
+    )
     return parser.parse_args()
 
 
@@ -302,23 +308,26 @@ def main() -> None:
             )
             print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
             log_train_epoch(avg_loss=avg_loss, epoch=epoch)
-            val_metrics = validate_epoch(
-                model=model,
-                dataset_path=str(data_loader_config["datapath"]),
-                data_loader_config=data_loader_config,
-                device=device,
-                clip_distance=args.clip_distance,
-                ssi_loss=ssi_loss,
-                grad_loss=grad_loss,
-                input_key="depth_aligned_events",
-                no_grad_loss=args.no_grad_loss,
-                delta=args.delta,
-            )
-            print(
-                f"Epoch {epoch} validation | loss {val_metrics['loss']:.6f} | "
-                f"abs_rel {val_metrics['_abs_rel_diff']:.6f}"
-            )
-            log_validation_epoch(metrics=val_metrics, epoch=epoch)
+            if args.no_validation:
+                print(f"Epoch {epoch} validation skipped (--no-validation)")
+            else:
+                val_metrics = validate_epoch(
+                    model=model,
+                    dataset_path=str(data_loader_config["datapath"]),
+                    data_loader_config=data_loader_config,
+                    device=device,
+                    clip_distance=args.clip_distance,
+                    ssi_loss=ssi_loss,
+                    grad_loss=grad_loss,
+                    input_key="depth_aligned_events",
+                    no_grad_loss=args.no_grad_loss,
+                    delta=args.delta,
+                )
+                print(
+                    f"Epoch {epoch} validation | loss {val_metrics['loss']:.6f} | "
+                    f"abs_rel {val_metrics['_abs_rel_diff']:.6f}"
+                )
+                log_validation_epoch(metrics=val_metrics, epoch=epoch)
 
             if args.save_every > 0 and epoch % args.save_every == 0:
                 save_checkpoint(args.save_dir, epoch, model, optimizer)
