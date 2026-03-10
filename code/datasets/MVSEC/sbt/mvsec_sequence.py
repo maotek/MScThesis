@@ -423,6 +423,15 @@ class MVSECSequence(Dataset):
         Note:
             Timestamps are normalized to [0, 1] range relative to the time window
         """
+        if t.size == 0:
+            empty = np.empty((0,), dtype="float32")
+            return self.event_representation.convert(
+                torch.from_numpy(empty),
+                torch.from_numpy(empty),
+                torch.from_numpy(empty),
+                torch.from_numpy(empty),
+            )
+
         # Normalize timestamps to [0, 1] range
         t = (t - t[0]).astype("float32")
         t = t / t[-1] if t[-1] > 0 else t  # Avoid division by zero
