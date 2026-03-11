@@ -91,6 +91,27 @@ class SmallUNet2(torch.nn.Module):
         return torch.sigmoid(self.out_conv(d1))
 
 
+class SmallUNet3(torch.nn.Module):
+    """Small UNet variant with one encoder and one decoder stage."""
+
+    def __init__(self, in_channels: int = 5, base_channels: int = 32) -> None:
+        super().__init__()
+        self.enc1 = _ConvBlock(in_channels, base_channels)
+        self.bottleneck = _ConvBlock(base_channels, base_channels * 2)
+        self.dec1 = _ConvBlock(base_channels * 2 + base_channels, base_channels)
+        self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+        self.out_conv = torch.nn.Conv2d(base_channels, 3, kernel_size=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        e1 = self.enc1(x)
+        b = self.bottleneck(self.pool(e1))
+
+        d1 = F.interpolate(b, size=e1.shape[-2:], mode="bilinear", align_corners=False)
+        d1 = self.dec1(torch.cat([d1, e1], dim=1))
+
+        return torch.sigmoid(self.out_conv(d1))
+
+
 class UNetDav2(torch.nn.Module):
     """Pipeline: events -> small UNet -> DAV2 depth.
 
@@ -123,6 +144,11 @@ class UNetDav2(torch.nn.Module):
             )
         elif unet_type == "small2":
             self.unet = SmallUNet2(
+                in_channels=input_channels,
+                base_channels=unet_base_channels,
+            )
+        elif unet_type == "small3":
+            self.unet = SmallUNet3(
                 in_channels=input_channels,
                 base_channels=unet_base_channels,
             )
