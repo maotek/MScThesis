@@ -144,6 +144,7 @@ def evaluate_sequence(
     model_name: str,
     vis_interval: int,
     vis_dir: str,
+    data_loader_config: Dict[str, object],
 ) -> Tuple[Dict[str, float], int]:
     
     model.eval()
@@ -172,7 +173,11 @@ def evaluate_sequence(
         pred_depth = model(events)  # (1,1,320,640)
         
         if model_name in ("e2vid_dav2", "etnet_dav2", "unet_dav2", "unet_dav2_rgb", "dav2_rgb", "dav2", "dav2_composite"):
-            pred_depth = 1.0 / (pred_depth + 1)  # convert to depth in ~meters
+            # Convert from relative inverse depth to depth
+            if data_loader_config.get("dataset", "").lower() == "mvsec":
+                pred_depth = 1.0 / (pred_depth + 0.25)
+            else:
+                pred_depth = 1.0 / (pred_depth + 1)
     
         pred_depth = pred_depth.squeeze(1)  # (1,320,640)
         target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
@@ -385,6 +390,7 @@ def main() -> None:
             model_name=model_config["model_type"],
             vis_interval=config.get("vis_interval", 0),
             vis_dir=vis_dir,
+            data_loader_config=data_loader_config,
         )
 
         seq_avg = {k: v / frames for k, v in metrics_sum.items()}
