@@ -39,7 +39,7 @@
     "checkpoint_path": "output/train_unet_dav2_batch10_ch16/epoch_050.pt"
   },
   "vis_interval": 200,
-  "vis_dir": "output/evaluate_unet_dav2_batch10_ch16",
+  "vis_dir": "output/evaluate_dsec_unet_dav2_batch10_ch16",
   "use_scaleshift": true,
   "clip_distance": 80.0
 }

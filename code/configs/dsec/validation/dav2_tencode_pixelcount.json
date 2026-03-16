@@ -33,7 +33,7 @@
 //     "input_size_height": 266
 //   },
 //   "vis_interval": 200,
-//   "vis_dir": "output/evaluate_dav2_tencode_pixelcount",
+//   "vis_dir": "output/evaluate_dsec_dav2_tencode_pixelcount",
 //   "use_scaleshift": true,
 //   "clip_distance": 80.0
 // }

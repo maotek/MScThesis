@@ -32,7 +32,7 @@
     "input_size_height": 266
   },
   "vis_interval": 200,
-  "vis_dir": "output/evaluate_e2vid_dav2_voxelgrid_MVSEC",
+  "vis_dir": "output/evaluate_mvsec_e2vid_dav2_voxelgrid_MVSEC",
   "use_scaleshift": true,
   "clip_distance": 80.0
 }

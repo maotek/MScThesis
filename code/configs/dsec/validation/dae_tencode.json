@@ -40,7 +40,7 @@
     "checkpoint": "models/depthanyevent/weights/dav2/finetuned_dsec/finetuned_dsec.pth"
   },
   "vis_interval": 200,
-  "vis_dir": "output/evaluate_dae_tencode",
+  "vis_dir": "output/evaluate_dsec_dae_tencode",
   "use_scaleshift": true,
   "clip_distance": 80.0
 }
