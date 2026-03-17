@@ -17,7 +17,6 @@ from .constants import (
     MVSEC_WIDTH, 
     MVSEC_TRAIN,
     MVSEC_TEST,
-    MVSEC_VALIDATION,
     MVSEC_ALL_DATA_FOLDERS,
 )
 
@@ -55,8 +54,6 @@ def load_datasets(
     # Determine sequences to load based on data split
     if data_split == "train":
         data_folders = MVSEC_TRAIN
-    elif data_split == "validation":
-        data_folders = MVSEC_VALIDATION
     elif data_split == "test":
         data_folders = MVSEC_TEST
     else:

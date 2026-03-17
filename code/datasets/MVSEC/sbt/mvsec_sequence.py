@@ -423,6 +423,8 @@ class MVSECSequence(Dataset):
         Note:
             Timestamps are normalized to [0, 1] range relative to the time window
         """
+
+        # If there are no events, return an empty representation
         if t.size == 0:
             empty = np.empty((0,), dtype="float32")
             return self.event_representation.convert(
