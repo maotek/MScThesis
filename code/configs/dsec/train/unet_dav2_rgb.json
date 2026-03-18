@@ -28,7 +28,7 @@
     "time_window_ms": 50
   },
   "model": {
-    "model_type": "unet_dav2",
+    "model_type": "unet_dav2_rgb",
     "input_channels": 3,
     "unet_base_channels": 32,
     "dav2_encoder": "vits",
