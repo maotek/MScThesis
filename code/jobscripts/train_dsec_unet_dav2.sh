@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=train_unet_dav2
-#SBATCH --output=train_unet_dav2_%j.out
-#SBATCH --error=train_unet_dav2_%j.err
+#SBATCH --job-name=train_dsec_unet_dav2
+#SBATCH --output=train_dsec_unet_dav2_%j.out
+#SBATCH --error=train_dsec_unet_dav2_%j.err
 #SBATCH --account=ewi-insy-prb
 #SBATCH --partition=insy,general
 #SBATCH --qos=medium
