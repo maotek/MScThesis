@@ -40,7 +40,7 @@
     "checkpoint_path": "output/train_unet_small2_dav2_batch10_ch8/epoch_050.pt"
   },
   "vis_interval": 200,
-  "vis_dir": "output/evaluate_mvsec_unet_small2_dav2_MVSEC_batch10_ch8",
+  "vis_dir": "output/evaluate_mvsec_unet_small2_dav2_batch10_ch8",
   "use_scaleshift": true,
   "clip_distance": 80.0
 }
