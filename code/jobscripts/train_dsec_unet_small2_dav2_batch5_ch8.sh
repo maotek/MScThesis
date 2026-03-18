@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=train_unet_dav2_MVSEC_batch10
-#SBATCH --output=train_unet_dav2_MVSEC_batch10_%j.out
-#SBATCH --error=train_unet_dav2_MVSEC_batch10_%j.err
+#SBATCH --job-name=train_unet_small2_dav2_batch5_ch8
+#SBATCH --output=train_unet_small2_dav2_batch5_ch8_%j.out
+#SBATCH --error=train_unet_small2_dav2_batch5_ch8_%j.err
 #SBATCH --account=ewi-insy-prb
 #SBATCH --partition=insy,general
 #SBATCH --qos=medium
@@ -17,4 +17,4 @@ module load cuda cudnn miniconda # Load certain versions of cuda and cudnn
 
 cd MScThesis/code
 
-apptainer exec --nv ../../apptainer/image.sif python -m train_unet_dav2 --config configs/mvsec/train/unet_dav2_mvsec.json --save-dir output/train_unet_dav2_MVSEC_batch10
+apptainer exec --nv ../../apptainer/image.sif python -m train_unet_dav2 --config configs/dsec/train/unet_small2_dav2_batch5_ch8.json --save-dir output/train_dsec_unet_small2_dav2_batch5_ch8
