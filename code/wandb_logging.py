@@ -8,15 +8,17 @@ def init_training_wandb(
     args: Any,
     data_loader_config: Dict[str, object],
     model_config: Dict[str, object],
+    name: Optional[str] = None,
     project: Optional[str] = None,
     entity: str = "maoshengj-tu-delft",
 ) -> None:
-    config_name = os.path.splitext(os.path.basename(args.config_path))[0]
+    if name is None:
+        name = os.path.splitext(os.path.basename(args.config_path))[0]
 
     wandb.init(
         entity=entity,
         project="MScThesis",
-        name=config_name,
+        name=name,
         config={
             "seed": args.seed,
             "epochs": args.epochs,

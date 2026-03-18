@@ -23,6 +23,7 @@ from datasets.MVSEC.mvsec_dataset import fetch_dataloader as fetch_mvsec_dataloa
 from evaluation import prepare_target_data_torch
 from losses import MultiScaleGradient, ScaleAndShiftInvariantLoss
 from networks.unet_dav2 import UNetDav2
+from networks.fully_conv_dav2 import FullyConvDav2
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,7 +69,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--delta",
         type=float,
-        default=1.0,
+        default=0.25,
         help="Scale factor for grad loss in total loss: ssi_loss + delta * grad_loss.",
     )
     parser.add_argument(
@@ -76,6 +77,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         default=False,
         help="Disable validation after each epoch.",
+    )
+    parser.add_argument(
+        "--wandb-name",
+        type=str,
+        default=None,
+        help="Name for the wandb run. If not set, defaults to the config file name.",
     )
     return parser.parse_args()
 
@@ -104,17 +111,40 @@ def setup_device_and_seeds(seed: int) -> torch.device:
 
 
 def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDav2:
-    return UNetDav2(
-        input_channels=int(model_config.get("input_channels", 5)),
-        unet_base_channels=int(model_config.get("unet_base_channels", 32)),
-        unet_type=str(model_config.get("unet_type", "small")),
-        dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
-        dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
-        input_size_width=int(model_config.get("input_size_width", 350)),
-        input_size_height=int(model_config.get("input_size_height", 266)),
-        freeze_dav2=bool(model_config.get("freeze_dav2", True)),
-        device=device,
-    )
+    if str(model_config.get("model_type", "")).lower() == "fully_conv_dav2":
+        return FullyConvDav2(
+            input_channels=int(model_config.get("input_channels", 5)),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+        )
+    elif str(model_config.get("model_type", "")).lower() == "unet_dav2_rgb":
+        return UNetDav2(
+            input_channels=int(model_config.get("input_channels", 3)),
+            unet_base_channels=int(model_config.get("unet_base_channels", 32)),
+            unet_type=str(model_config.get("unet_type", "small")),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+        )
+    elif str(model_config.get("model_type", "")).lower() == "unet_dav2":
+        return UNetDav2(
+            input_channels=int(model_config.get("input_channels", 5)),
+            unet_base_channels=int(model_config.get("unet_base_channels", 32)),
+            unet_type=str(model_config.get("unet_type", "small")),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+        )
 
 
 def save_checkpoint(save_dir: str, epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer) -> None:
@@ -170,6 +200,7 @@ def train_epoch(
     save_dir: str,
     no_grad_loss: bool,
     delta: float,
+    model_type: str,
 ) -> float:
     model.train()
     running_loss = 0.0
@@ -178,7 +209,10 @@ def train_epoch(
     for seq_name, data_loader in dataloaders.items():
         for batch_idx, sample in enumerate(tqdm.tqdm(data_loader, desc=f"Epoch {epoch} {seq_name}")):
             target_depth_t = sample["depth"][:, 0, 0].to(device)  # (B,H,W)
-            events = sample["depth_aligned_events"][:, 0].to(device)  # (B,C,H,W)
+            if model_type == "unet_dav2_rgb":
+                events = sample["rgb"][:, 0].to(device)  # (B,C,H,W)
+            else:
+                events = sample["depth_aligned_events"][:, 0].to(device)  # (B,C,H,W)
 
             pred_depth = model(events)  # (B,1,H,W)
             pred_depth = 1.0 / (pred_depth + 1.0)
@@ -236,6 +270,7 @@ def main() -> None:
     device = setup_device_and_seeds(args.seed)
 
     data_loader_config, model_config = load_config(args.config_path)
+    model_type = str(model_config.get("model_type", "")).lower()
 
     dataset_name = str(data_loader_config.get("dataset", "")).lower()
     if dataset_name == "dsec":
@@ -267,6 +302,7 @@ def main() -> None:
         args=args,
         data_loader_config=data_loader_config,
         model_config=model_config,
+        name=args.wandb_name,
     )
 
     start_epoch = 1
@@ -305,6 +341,7 @@ def main() -> None:
                 save_dir=args.save_dir,
                 no_grad_loss=args.no_grad_loss,
                 delta=args.delta,
+                model_type=model_type,
             )
             print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
             log_train_epoch(avg_loss=avg_loss, epoch=epoch)
@@ -319,7 +356,7 @@ def main() -> None:
                     clip_distance=args.clip_distance,
                     ssi_loss=ssi_loss,
                     grad_loss=grad_loss,
-                    input_key="depth_aligned_events",
+                    input_key="rgb" if model_type == "unet_dav2_rgb" else "depth_aligned_events",
                     no_grad_loss=args.no_grad_loss,
                     delta=args.delta,
                 )
