@@ -1,0 +1,39 @@
+{
+  "data_loader": {
+    "dataset": "dsec",
+    "datapath": "datasets/DSEC/data",
+    "split": "train",
+    "concatenate_sequences": false,
+    "event_representation": {
+      "representation_type": "voxelgrid",
+      "channels": 3,
+      "height": 480,
+      "width": 640,
+      "normalize": true
+    },
+    "preprocessing": [
+      {
+        "preprocessing_type": "CenterCrop",
+        "height": 320,
+        "width": 640
+      }
+    ],
+    "load_images": false,
+    "batch_size": 10,
+    "num_workers": 1,
+    "pin_memory": true,
+    "shuffle": true,
+    "sequence_window": 1,
+    "sequence_step": 1,
+    "time_window_ms": 50
+  },
+  "model": {
+    "model_type": "fully_conv_dav2",
+    "input_channels": 3,
+    "dav2_encoder": "vits",
+    "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
+    "input_size_width": 350,
+    "input_size_height": 266,
+    "freeze_dav2": true
+  }
+}
