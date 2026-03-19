@@ -61,12 +61,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grad-num-scales", type=int, default=4, help="MultiScaleGradient number of scales.")
     parser.add_argument("--grad-weight", type=float, default=1.0, help="MultiScaleGradient weight.")
     parser.add_argument(
-        "--no-grad-loss",
-        action="store_true",
-        default=False,
-        help="Disable MultiScaleGradient term in loss.",
-    )
-    parser.add_argument(
         "--delta",
         type=float,
         default=0.25,
@@ -198,7 +192,6 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     log_interval: int,
     save_dir: str,
-    no_grad_loss: bool,
     delta: float,
     model_type: str,
 ) -> float:
@@ -224,13 +217,13 @@ def train_epoch(
                 continue
 
             loss_ssi = ssi_loss(pred_depth, target_proc_t, valid_mask)
-            if no_grad_loss:
-                loss_grad_value = 0.0
-                loss = loss_ssi
-            else:
+            if delta != 0.0:
                 loss_grad = grad_loss(pred_depth, target_proc_t.unsqueeze(1), valid_mask.unsqueeze(1))
                 loss_grad_value = loss_grad.item()
                 loss = loss_ssi + delta * loss_grad
+            else:
+                loss_grad_value = 0.0
+                loss = loss_ssi
 
             optimizer.zero_grad()
             loss.backward()
@@ -339,7 +332,6 @@ def main() -> None:
                 optimizer=optimizer,
                 log_interval=args.log_interval,
                 save_dir=args.save_dir,
-                no_grad_loss=args.no_grad_loss,
                 delta=args.delta,
                 model_type=model_type,
             )
@@ -357,7 +349,6 @@ def main() -> None:
                     ssi_loss=ssi_loss,
                     grad_loss=grad_loss,
                     input_key="rgb" if model_type == "unet_dav2_rgb" else "depth_aligned_events",
-                    no_grad_loss=args.no_grad_loss,
                     delta=args.delta,
                 )
                 print(
