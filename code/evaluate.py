@@ -21,6 +21,7 @@ from networks.dav2 import Dav2
 from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from networks.etnet_dav2 import ETNetDav2
+from networks.fully_conv_dav2 import FullyConvDav2
 from networks.unet_dav2 import UNetDav2
 from evaluation import (
     add_to_metrics,
@@ -172,7 +173,7 @@ def evaluate_sequence(
         
         pred_depth = model(events)  # (1,1,320,640)
         
-        if model_name in ("e2vid_dav2", "etnet_dav2", "unet_dav2", "unet_dav2_rgb", "dav2_rgb", "dav2", "dav2_composite"):
+        if model_name in ("e2vid_dav2", "etnet_dav2", "fully_conv_dav2", "unet_dav2", "unet_dav2_rgb", "dav2_rgb", "dav2", "dav2_composite"):
             # Convert from relative inverse depth to depth
             if data_loader_config.get("dataset", "").lower() == "mvsec":
                 pred_depth = 1.0 / (pred_depth + 0.25)
@@ -214,7 +215,7 @@ def evaluate_sequence(
                 events=events,
                 pred_np=pred_depth.detach().cpu().squeeze().numpy(),
                 vis_dir=vis_dir,
-                vis_temp=getattr(model, "vis_temp", None) if model_name in ("unet_dav2", "unet_dav2_rgb") else None,
+                vis_temp=getattr(model, "vis_temp", None) if model_name in ("fully_conv_dav2", "unet_dav2", "unet_dav2_rgb") else None,
             )
 
         for depth_threshold in (10, 20, 30):
@@ -314,6 +315,26 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             if k.startswith("unet.")
         }
         model.unet.load_state_dict(unet_state, strict=True)
+        return model
+    
+    elif model_name == "fully_conv_dav2":
+        model = FullyConvDav2(
+            input_channels=int(model_config.get("input_channels", 5)),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+        )
+        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_dsec_fully_conv_dav2_batch10", "epoch_050.pt")), map_location="cpu")
+        state = ckpt.get("model_state_dict", ckpt)
+        fc_state = {
+            k.replace("fully_conv.", ""): v
+            for k, v in state.items()
+            if k.startswith("fully_conv.")
+        }
+        model.fully_conv.load_state_dict(fc_state, strict=True)
         return model
     
     elif model_name == "unet_dav2_rgb":
