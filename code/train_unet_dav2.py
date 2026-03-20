@@ -152,6 +152,8 @@ def train_epoch(
     save_dir: str,
     delta: float,
     model_type: str,
+    inv_prediction: bool,
+    inv_prediction_constant: float,
 ) -> float:
     model.train()
     running_loss = 0.0
@@ -166,7 +168,8 @@ def train_epoch(
                 events = sample["depth_aligned_events"][:, 0].to(device)  # (B,C,H,W)
 
             pred_depth = model(events)  # (B,1,H,W)
-            pred_depth = 1.0 / (pred_depth + 1.0)
+            if inv_prediction:
+                pred_depth = 1.0 / (pred_depth + inv_prediction_constant)
 
             target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
             valid_mask = (target_proc_t > 0) & (~torch.isnan(target_proc_t))
@@ -274,6 +277,8 @@ def main() -> None:
                 save_dir=str(training_config.get("save_dir", "output/train_unet_dav2")),
                 delta=float(training_config.get("delta", 0.25)),
                 model_type=model_type,
+                inv_prediction=bool(training_config.get("inv_prediction", True)),
+                inv_prediction_constant=float(training_config.get("inv_prediction_constant", 1.0)),
             )
             print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
             log_train_epoch(avg_loss=avg_loss, epoch=epoch)
@@ -290,6 +295,8 @@ def main() -> None:
                     grad_loss=grad_loss,
                     input_key="rgb" if model_type == "unet_dav2_rgb" else "depth_aligned_events",
                     delta=float(training_config.get("delta", 0.25)),
+                    inv_prediction=bool(training_config.get("inv_prediction", True)),
+                    inv_prediction_constant=float(training_config.get("inv_prediction_constant", 1.0)),
                 )
                 print(
                     f"Epoch {epoch} validation | loss {val_metrics['loss']:.6f} | "

@@ -21,6 +21,8 @@ def validate_epoch(
     grad_loss: torch.nn.Module,
     input_key: str,
     delta: float = 1.0,
+    inv_prediction: bool = True,
+    inv_prediction_constant: float = 1.0,
 ) -> Dict[str, float]:
     dataset_name = str(data_loader_config.get("dataset", "")).lower()
     if dataset_name not in ("dsec", "mvsec"):
@@ -53,7 +55,8 @@ def validate_epoch(
             events = sample[input_key][:, 0].to(device)
 
             pred_depth = model(events)
-            pred_depth = 1.0 / (pred_depth + 1.0)
+            if inv_prediction:
+                pred_depth = 1.0 / (pred_depth + inv_prediction_constant)
 
             target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
             valid_mask = (target_proc_t > 0) & (~torch.isnan(target_proc_t))
