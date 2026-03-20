@@ -28,15 +28,18 @@ def init_training_wandb(
             "data_loader_config": data_loader_config,
         },
     )
+    wandb.define_metric("samples_seen")
+    wandb.define_metric("*", step_metric="samples_seen")
 
 
-def log_train_step(loss: float, loss_ssi: float, loss_grad: float, epoch: int) -> None:
+def log_train_step(loss: float, loss_ssi: float, loss_grad: float, epoch: int, samples_seen: int) -> None:
     wandb.log(
         {
             "train/loss": loss,
             "train/loss_ssi": loss_ssi,
             "train/loss_grad": loss_grad,
             "train/epoch": epoch,
+            "samples_seen": samples_seen,
         }
     )
 

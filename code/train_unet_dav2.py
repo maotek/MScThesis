@@ -154,7 +154,8 @@ def train_epoch(
     model_type: str,
     inv_prediction: bool,
     inv_prediction_constant: float,
-) -> float:
+    samples_seen: int,
+) -> Tuple[float, int]:
     model.train()
     running_loss = 0.0
     step = 0
@@ -191,11 +192,13 @@ def train_epoch(
             optimizer.step()
 
             running_loss += loss.item()
+            samples_seen += target_depth_t.shape[0]
             log_train_step(
                 loss=loss.item(),
                 loss_ssi=loss_ssi.item(),
                 loss_grad=loss_grad_value,
                 epoch=epoch,
+                samples_seen=samples_seen,
             )
 
             if step % 500 == 0 and model.vis_temp is not None:
@@ -216,7 +219,7 @@ def train_epoch(
                     f"ssi {loss_ssi.item():.6f} | grad {loss_grad_value:.6f}"
                 )
 
-    return running_loss / float(max(step, 1))
+    return running_loss / float(max(step, 1)), samples_seen
 
 
 def main() -> None:
@@ -233,6 +236,7 @@ def main() -> None:
         dataloaders = fetch_mvsec_dataloader(data_loader_config, test=False)
     else:
         raise ValueError(f"Unsupported dataset in config: {dataset_name}")
+    
     model = build_model(model_config, device)
 
     ssi_loss = ScaleAndShiftInvariantLoss(
@@ -262,9 +266,11 @@ def main() -> None:
 
     start_epoch = 1
     end_epoch = start_epoch + int(training_config.get("epochs", 50)) - 1
+    samples_seen = 0
+
     try:
         for epoch in range(start_epoch, end_epoch + 1):
-            avg_loss = train_epoch(
+            avg_loss, samples_seen = train_epoch(
                 epoch=epoch,
                 dataloaders=dataloaders,
                 model=model,
@@ -279,6 +285,7 @@ def main() -> None:
                 model_type=model_type,
                 inv_prediction=bool(training_config.get("inv_prediction", True)),
                 inv_prediction_constant=float(training_config.get("inv_prediction_constant", 1.0)),
+                samples_seen=samples_seen,
             )
             print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
             log_train_epoch(avg_loss=avg_loss, epoch=epoch)
