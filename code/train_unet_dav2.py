@@ -35,62 +35,20 @@ def parse_args() -> argparse.Namespace:
         help="JSON config with data_loader and model sections.",
     )
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
-    parser.add_argument("--epochs", type=int, default=50, help="Number of epochs.")
-    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate.")
-    parser.add_argument("--weight-decay", type=float, default=0.0, help="Weight decay.")
-    parser.add_argument("--clip-distance", type=float, default=80.0, help="Max depth value (meters).")
-    parser.add_argument("--log-interval", type=int, default=100, help="Steps between loss logs.")
-    parser.add_argument("--save-dir", type=str, default="output/train_unet_dav2", help="Checkpoint output dir.")
-    parser.add_argument("--save-every", type=int, default=1, help="Save checkpoint every N epochs.")
-    parser.add_argument(
-        "--resume-checkpoint",
-        type=str,
-        # default=os.path.join("output", "train_unet_dav2", "epoch_050.pt"),
-        help="Checkpoint to resume from; set to empty string to disable.",
-    )
-    parser.add_argument("--ssi-alpha", type=float, default=0.0, help="Scale-and-shift loss alpha term.")
-    parser.add_argument("--ssi-scales", type=int, default=4, help="Scales for scale-and-shift loss.")
-    parser.add_argument(
-        "--ssi-reduction",
-        type=str,
-        default="batch",
-        choices=["batch", "image"],
-        help="Reduction type for scale-and-shift loss.",
-    )
-    parser.add_argument("--grad-start-scale", type=int, default=1, help="MultiScaleGradient start scale.")
-    parser.add_argument("--grad-num-scales", type=int, default=4, help="MultiScaleGradient number of scales.")
-    parser.add_argument("--grad-weight", type=float, default=1.0, help="MultiScaleGradient weight.")
-    parser.add_argument(
-        "--delta",
-        type=float,
-        default=0.25,
-        help="Scale factor for grad loss in total loss: ssi_loss + delta * grad_loss.",
-    )
-    parser.add_argument(
-        "--no-validation",
-        action="store_true",
-        default=False,
-        help="Disable validation after each epoch.",
-    )
-    parser.add_argument(
-        "--wandb-name",
-        type=str,
-        default=None,
-        help="Name for the wandb run. If not set, defaults to the config file name.",
-    )
     return parser.parse_args()
 
 
-def load_config(config_path: str) -> Tuple[Dict[str, object], Dict[str, object]]:
+def load_config(config_path: str) -> Tuple[Dict[str, object], Dict[str, object], Dict[str, object]]:
     with open(config_path, "r") as f:
         config = json.load(f)
 
-    if "data_loader" not in config or "model" not in config:
-        raise KeyError("Config must contain top-level 'data_loader' and 'model'")
+    if "data_loader" not in config or "model" not in config or "training" not in config:
+        raise KeyError("Config must contain top-level 'data_loader', 'model', and 'training'")
 
     data_loader_config = dict(config["data_loader"])
     model_config = dict(config["model"])
-    return data_loader_config, model_config
+    training_config = dict(config["training"])
+    return data_loader_config, model_config, training_config
 
 
 def setup_device_and_seeds(seed: int) -> torch.device:
@@ -262,7 +220,7 @@ def main() -> None:
     args = parse_args()
     device = setup_device_and_seeds(args.seed)
 
-    data_loader_config, model_config = load_config(args.config_path)
+    data_loader_config, model_config, training_config = load_config(args.config_path)
     model_type = str(model_config.get("model_type", "")).lower()
 
     dataset_name = str(data_loader_config.get("dataset", "")).lower()
@@ -275,50 +233,32 @@ def main() -> None:
     model = build_model(model_config, device)
 
     ssi_loss = ScaleAndShiftInvariantLoss(
-        alpha=args.ssi_alpha,
-        scales=args.ssi_scales,
-        reduction_type=args.ssi_reduction,
+        alpha=float(training_config.get("ssi_alpha", 0.0)),
+        scales=int(training_config.get("ssi_scales", 4)),
+        reduction_type=str(training_config.get("ssi_reduction", "batch")),
         weight=1.0,
     ).to(device)
     grad_loss = MultiScaleGradient(
-        start_scale=args.grad_start_scale,
-        num_scales=args.grad_num_scales,
-        weight=args.grad_weight,
+        start_scale=int(training_config.get("grad_start_scale", 1)),
+        num_scales=int(training_config.get("grad_num_scales", 4)),
+        weight=float(training_config.get("grad_weight", 1.0)),
     ).to(device)
 
     optimizer = torch.optim.Adam(
         [p for p in model.parameters() if p.requires_grad],
-        lr=args.lr,
-        weight_decay=args.weight_decay,
+        lr=float(training_config.get("lr", 1e-4)),
+        weight_decay=float(training_config.get("weight_decay", 0.0)),
     )
     init_training_wandb(
         args=args,
         data_loader_config=data_loader_config,
         model_config=model_config,
-        name=args.wandb_name,
+        training_config=training_config,
+        name=str(training_config.get("wandb_name")),
     )
 
     start_epoch = 1
-    if args.resume_checkpoint:
-        resume_path = args.resume_checkpoint
-        if os.path.isfile(resume_path):
-            ckpt = torch.load(resume_path, map_location="cpu")
-            state = ckpt.get("model_state_dict", ckpt)
-            unet_state = {
-                k.replace("concentrator.", ""): v
-                for k, v in state.items()
-                if k.startswith("concentrator.")
-            }
-            model.unet.load_state_dict(unet_state, strict=True)
-            if "optimizer_state_dict" in ckpt:
-                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-            if "epoch" in ckpt:
-                start_epoch = int(ckpt["epoch"]) + 1
-            print(f"Resumed from {resume_path} at epoch {start_epoch}")
-        else:
-            print(f"Resume checkpoint not found: {resume_path}. Starting from scratch.")
-
-    end_epoch = start_epoch + args.epochs - 1
+    end_epoch = start_epoch + int(training_config.get("epochs", 50)) - 1
     try:
         for epoch in range(start_epoch, end_epoch + 1):
             avg_loss = train_epoch(
@@ -326,18 +266,18 @@ def main() -> None:
                 dataloaders=dataloaders,
                 model=model,
                 device=device,
-                clip_distance=args.clip_distance,
+                clip_distance=float(training_config.get("clip_distance", 80.0)),
                 ssi_loss=ssi_loss,
                 grad_loss=grad_loss,
                 optimizer=optimizer,
-                log_interval=args.log_interval,
-                save_dir=args.save_dir,
-                delta=args.delta,
+                log_interval=int(training_config.get("log_interval", 100)),
+                save_dir=str(training_config.get("save_dir", "output/train_unet_dav2")),
+                delta=float(training_config.get("delta", 0.25)),
                 model_type=model_type,
             )
             print(f"Epoch {epoch} complete | avg loss {avg_loss:.6f}")
             log_train_epoch(avg_loss=avg_loss, epoch=epoch)
-            if args.no_validation:
+            if bool(training_config.get("no_validation", False)):
                 print(f"Epoch {epoch} validation skipped (--no-validation)")
             else:
                 val_metrics = validate_epoch(
@@ -345,11 +285,11 @@ def main() -> None:
                     dataset_path=str(data_loader_config["datapath"]),
                     data_loader_config=data_loader_config,
                     device=device,
-                    clip_distance=args.clip_distance,
+                    clip_distance=float(training_config.get("clip_distance", 80.0)),
                     ssi_loss=ssi_loss,
                     grad_loss=grad_loss,
                     input_key="rgb" if model_type == "unet_dav2_rgb" else "depth_aligned_events",
-                    delta=args.delta,
+                    delta=float(training_config.get("delta", 0.25)),
                 )
                 print(
                     f"Epoch {epoch} validation | loss {val_metrics['loss']:.6f} | "
@@ -357,8 +297,9 @@ def main() -> None:
                 )
                 log_validation_epoch(metrics=val_metrics, epoch=epoch)
 
-            if args.save_every > 0 and epoch % args.save_every == 0:
-                save_checkpoint(args.save_dir, epoch, model, optimizer)
+            save_every = int(training_config.get("save_every", 1))
+            if save_every > 0 and epoch % save_every == 0:
+                save_checkpoint(str(training_config.get("save_dir", "output/train_unet_dav2")), epoch, model, optimizer)
     finally:
         finish_training_wandb()
 
