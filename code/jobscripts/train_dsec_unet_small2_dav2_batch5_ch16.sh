@@ -17,4 +17,4 @@ module load cuda cudnn miniconda # Load certain versions of cuda and cudnn
 
 cd MScThesis/code
 
-apptainer exec --nv ../../apptainer/image.sif python -m train_unet_dav2 --config configs/dsec/train/unet_small2_dav2_batch5_ch16.json --save-dir output/train_dsec_unet_small2_dav2_batch5_ch16
+apptainer exec --nv ../../apptainer/image.sif python -m train_unet_dav2 --config configs/dsec/train/unet_small2_dav2_batch5_ch16.json

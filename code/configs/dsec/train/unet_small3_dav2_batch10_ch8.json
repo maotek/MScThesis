@@ -37,5 +37,25 @@
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true
+  },
+  "training": {
+    "epochs": 50,
+    "lr": 0.0001,
+    "weight_decay": 0.0,
+    "clip_distance": 80.0,
+    "log_interval": 100,
+    "save_dir": "train_output/train_dsec_unet_small3_dav2_batch10_ch8",
+    "save_every": 1,
+    "ssi_alpha": 0.0,
+    "ssi_scales": 4,
+    "ssi_reduction": "batch",
+    "grad_start_scale": 1,
+    "grad_num_scales": 4,
+    "grad_weight": 1.0,
+    "delta": 0.25,
+    "no_validation": false,
+    "wandb_name": "train_dsec_unet_small3_dav2_batch10_ch8",
+    "inv_prediction": true,
+    "inv_prediction_constant": 1.0
   }
 }

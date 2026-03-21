@@ -13,9 +13,9 @@
     },
     "preprocessing": [
       {
-        "preprocessing_type": "CenterCrop",
-        "height": 320,
-        "width": 640
+        "preprocessing_type": "RandomCrop",
+        "height": 260,
+        "width": 346
       }
     ],
     "load_images": false,
@@ -30,8 +30,7 @@
   "model": {
     "model_type": "unet_dav2",
     "input_channels": 5,
-    "unet_base_channels": 16,
-    "unet_type": "small3",
+    "unet_base_channels": 8,
     "dav2_encoder": "vits",
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
     "input_size_width": 350,
@@ -44,7 +43,7 @@
     "weight_decay": 0.0,
     "clip_distance": 80.0,
     "log_interval": 100,
-    "save_dir": "train_output/train_dsec_unet_small3_dav2_batch10_ch16",
+    "save_dir": "train_output/train_dsec_unet_dav2_batch10_ch8_RC_noinv",
     "save_every": 1,
     "ssi_alpha": 0.0,
     "ssi_scales": 4,
@@ -54,8 +53,8 @@
     "grad_weight": 1.0,
     "delta": 0.25,
     "no_validation": false,
-    "wandb_name": "train_dsec_unet_small3_dav2_batch10_ch16",
-    "inv_prediction": true,
+    "wandb_name": "train_dsec_unet_dav2_batch10_ch8_RC_noinv",
+    "inv_prediction": false,
     "inv_prediction_constant": 1.0
   }
 }
