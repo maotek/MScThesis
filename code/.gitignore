@@ -31,3 +31,6 @@ datasets/DSEC/data
 datasets/mvsec/data/
 **/**.pt
 wandb/
+evaluate_output/
+evaluate_results/
+output/
