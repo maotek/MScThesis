@@ -55,10 +55,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--csv-path",
-        required=True,
+        required=False,
         type=str,
         default=None,
-        help="Optional CSV output path for metrics.",
+        help="Optional CSV output path for metrics (overrides config csv_path).",
     )
     return parser.parse_args()
 
@@ -369,15 +369,17 @@ def main() -> None:
     print("Setting up device and seeds...")
     device = setup_device_and_seeds(args)
 
-    # Ensure CSV_path directory exists
-    print("Preparing CSV output directory...")
-    if args.csv_path:
-        csv_dir = os.path.dirname(os.path.abspath(args.csv_path))
-        os.makedirs(csv_dir, exist_ok=True)
-
     # Reading config
     print("Loading configuration...")
     data_loader_config, model_config, config = load_config(args.config_path)
+
+    csv_path = args.csv_path or config.get("csv_path")
+
+    # Ensure CSV_path directory exists
+    print(f"Preparing CSV output directory... {csv_path}")
+    if csv_path:
+        csv_dir = os.path.dirname(os.path.abspath(csv_path))
+        os.makedirs(csv_dir, exist_ok=True)
 
     # Ensure visualization directory exists
     vis_dir = config.get("vis_dir", "visualizations")
@@ -437,8 +439,8 @@ def main() -> None:
         for k in sorted(overall_avg.keys()):
             print(f"{k}: {overall_avg[k]:.6f}")
 
-        if args.csv_path:
-            write_csv(args.csv_path, seq_results, overall_avg)
+        if csv_path:
+            write_csv(csv_path, seq_results, overall_avg)
 
 
 

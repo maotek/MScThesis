@@ -43,5 +43,6 @@
   "use_scaleshift": true,
   "clip_distance": 80.0,
   "inv_prediction": true,
-  "inv_prediction_constant": 1.0
+  "inv_prediction_constant": 1.0,
+  "csv_path": "results/dsec_validation_unet_dav2_batch10_ch8.csv"
 }

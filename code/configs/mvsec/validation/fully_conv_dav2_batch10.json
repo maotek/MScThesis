@@ -42,5 +42,6 @@
   "use_scaleshift": true,
   "clip_distance": 80.0,
   "inv_prediction": true,
-  "inv_prediction_constant": 1.0
+  "inv_prediction_constant": 1.0,
+  "csv_path": "results/mvsec_validation_fully_conv_dav2_batch10.csv"
 }
