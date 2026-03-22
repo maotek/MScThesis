@@ -18,7 +18,7 @@ def init_training_wandb(
 
     wandb.init(
         entity=entity,
-        project="MScThesis",
+        project="MScThesisV2",
         name=name,
         config={
             "seed": args.seed,
