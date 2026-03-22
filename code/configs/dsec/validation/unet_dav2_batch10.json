@@ -19,7 +19,7 @@
       }
     ],
     "load_images": false,
-    "batch_size": 1, 
+    "batch_size": 1,
     "num_workers": 1,
     "pin_memory": true,
     "shuffle": false,
@@ -41,5 +41,7 @@
   "vis_interval": 200,
   "vis_dir": "output/evaluate_dsec_unet_dav2_batch10",
   "use_scaleshift": true,
-  "clip_distance": 80.0
+  "clip_distance": 80.0,
+  "inv_prediction": true,
+  "inv_prediction_constant": 1.0
 }

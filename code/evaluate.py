@@ -142,10 +142,10 @@ def evaluate_sequence(
     clip_distance: float,
     use_scaleshift: bool,
     representation: str,
-    model_name: str,
+    inv_prediction: bool,
+    inv_prediction_constant: float,
     vis_interval: int,
     vis_dir: str,
-    data_loader_config: Dict[str, object],
 ) -> Tuple[Dict[str, float], int]:
     
     model.eval()
@@ -173,12 +173,9 @@ def evaluate_sequence(
         
         pred_depth = model(events)  # (1,1,320,640)
         
-        if model_name in ("e2vid_dav2", "etnet_dav2", "fully_conv_dav2", "unet_dav2", "unet_dav2_rgb", "dav2_rgb", "dav2", "dav2_composite"):
+        if inv_prediction:
             # Convert from relative inverse depth to depth
-            if data_loader_config.get("dataset", "").lower() == "mvsec":
-                pred_depth = 1.0 / (pred_depth + 0.25)
-            else:
-                pred_depth = 1.0 / (pred_depth + 1)
+            pred_depth = 1.0 / (pred_depth + inv_prediction_constant)
     
         pred_depth = pred_depth.squeeze(1)  # (1,320,640)
         target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
@@ -215,7 +212,7 @@ def evaluate_sequence(
                 events=events,
                 pred_np=pred_depth.detach().cpu().squeeze().numpy(),
                 vis_dir=vis_dir,
-                vis_temp=getattr(model, "vis_temp", None) if model_name in ("fully_conv_dav2", "unet_dav2", "unet_dav2_rgb") else None,
+                vis_temp=getattr(model, "vis_temp", None),
             )
 
         for depth_threshold in (10, 20, 30):
@@ -389,6 +386,9 @@ def main() -> None:
 
     representation = data_loader_config.get("event_representation", {}).get("representation_type", "")
 
+    inv_prediction = bool(config.get("inv_prediction", True))
+    inv_prediction_constant = float(config.get("inv_prediction_constant", 1.0))
+
     model = fetch_model(model_config, device, representation=representation)
 
     metrics_sequence_dict: Dict[str, Dict[str, float]] = {}
@@ -408,10 +408,10 @@ def main() -> None:
             clip_distance=config.get("clip_distance", 80.0),
             use_scaleshift=config.get("use_scaleshift", True),
             representation=representation,
-            model_name=model_config["model_type"],
+            inv_prediction=inv_prediction,
+            inv_prediction_constant=inv_prediction_constant,
             vis_interval=config.get("vis_interval", 0),
             vis_dir=vis_dir,
-            data_loader_config=data_loader_config,
         )
 
         seq_avg = {k: v / frames for k, v in metrics_sum.items()}

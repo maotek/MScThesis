@@ -41,5 +41,7 @@
   "vis_interval": 200,
   "vis_dir": "output/evaluate_mvsec_unet_dav2_batch10_ch16_100ep",
   "use_scaleshift": true,
-  "clip_distance": 80.0
+  "clip_distance": 80.0,
+  "inv_prediction": true,
+  "inv_prediction_constant": 1.0
 }

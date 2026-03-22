@@ -34,5 +34,7 @@
   "vis_interval": 200,
   "vis_dir": "output/evaluate_mvsec_e2vid_dav2_voxelgrid",
   "use_scaleshift": true,
-  "clip_distance": 80.0
+  "clip_distance": 80.0,
+  "inv_prediction": true,
+  "inv_prediction_constant": 1.0
 }

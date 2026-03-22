@@ -42,5 +42,7 @@
   "vis_interval": 200,
   "vis_dir": "output/evaluate_mvsec_dae_tencode_on_DSEC_checkpoint",
   "use_scaleshift": true,
-  "clip_distance": 80.0
+  "clip_distance": 80.0,
+  "inv_prediction": false,
+  "inv_prediction_constant": 1.0
 }

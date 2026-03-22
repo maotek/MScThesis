@@ -48,6 +48,9 @@ def load_config(config_path: str) -> Tuple[Dict[str, object], Dict[str, object],
     data_loader_config = dict(config["data_loader"])
     model_config = dict(config["model"])
     training_config = dict(config["training"])
+    print("Data Loader Config:", data_loader_config)
+    print("Model Config:", model_config)
+    print("Training Config:", training_config)
     return data_loader_config, model_config, training_config
 
 

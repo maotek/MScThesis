@@ -92,8 +92,8 @@ def fetch_dataloader(config_dataloader: Dict[str, Any], test: bool = False):
         raise ValueError("No datapath provided")
     
     # print config
-    print("Dataloader config:")
-    pprint(config_dataloader)
+    # print("Dataloader config:")
+    # pprint(config_dataloader)
 
     datasplit = config_dataloader["split"]
     time_window_ms = config_dataloader.get("time_window_ms", 50)
