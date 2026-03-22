@@ -28,21 +28,20 @@
     "time_window_ms": 50
   },
   "model": {
-    "model_type": "unet_dav2",
+    "model_type": "fully_conv_dav2",
     "input_channels": 5,
-    "unet_base_channels": 16,
     "dav2_encoder": "vits",
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true,
-    "checkpoint_path": "train_output/train_unet_dav2_batch10_ch16_100ep/epoch_090.pt"
+    "checkpoint_path": "train_output/train_dsec_fully_conv_dav2_batch10_RC/epoch_050.pt"
   },
   "vis_interval": 200,
-  "vis_dir": "evaluate_output/evaluate_dsec_unet_dav2_batch10_ch16_100ep",
+  "vis_dir": "evaluate_output/evaluate_dsec_fully_conv_dav2_batch10_RC",
   "use_scaleshift": true,
   "clip_distance": 80.0,
   "inv_prediction": true,
   "inv_prediction_constant": 1.0,
-  "csv_path": "evaluate_results/dsec_validation_unet_dav2_batch10_ch16_100ep.csv"
+  "csv_path": "evaluate_results/dsec_validation_fully_conv_dav2_batch10_RC.csv"
 }
