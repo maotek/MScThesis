@@ -60,6 +60,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional CSV output path for metrics (overrides config csv_path).",
     )
+    parser.add_argument(
+        "--checkpoint-file",
+        required=False,
+        type=str,
+        default=None,
+        help="Optional checkpoint filename override for checkpoint_path (e.g., epoch_050.pt).",
+    )
     return parser.parse_args()
 
 
@@ -76,6 +83,25 @@ def load_config(config_path: str) -> Tuple[Dict[str, object], Dict[str, object]]
     config = {k: v for k, v in config.items() if k not in ("data_loader", "model")}
 
     return data_loader_config, model_config, config
+
+
+def _override_checkpoint_file(model_config: Dict[str, object], checkpoint_file: str) -> Dict[str, object]:
+    if "checkpoint_path" not in model_config:
+        print("Warning: --checkpoint-file provided but config has no checkpoint_path; ignoring.")
+        return model_config
+
+    old_path = str(model_config["checkpoint_path"])
+    file_name = os.path.basename(str(checkpoint_file)).strip()
+    if not file_name:
+        raise ValueError("Invalid --checkpoint-file (empty after basename).")
+
+    new_path = os.path.join(os.path.dirname(old_path), file_name)
+    if new_path != old_path:
+        print(f"Overriding checkpoint_path: {old_path} -> {new_path}")
+
+    updated = dict(model_config)
+    updated["checkpoint_path"] = new_path
+    return updated
 
 
 def setup_device_and_seeds(args: argparse.Namespace) -> torch.device:
@@ -346,7 +372,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
         )
-        ckpt = torch.load(os.path.join("output", "train_unet_dav2_rgb", "epoch_030.pt"), map_location="cpu")
+        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dav2_rgb", "epoch_030.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
         unet_state = {
             k.replace("unet.", ""): v
@@ -372,6 +398,8 @@ def main() -> None:
     # Reading config
     print("Loading configuration...")
     data_loader_config, model_config, config = load_config(args.config_path)
+    if args.checkpoint_file is not None:
+        model_config = _override_checkpoint_file(model_config, args.checkpoint_file)
 
     csv_path = args.csv_path or config.get("csv_path")
 

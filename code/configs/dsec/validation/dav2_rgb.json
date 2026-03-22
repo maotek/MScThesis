@@ -33,10 +33,10 @@
     "input_size_height": 266
   },
   "vis_interval": 200,
-  "vis_dir": "output/evaluate_dsec_dav2_rgb",
+  "vis_dir": "evaluate_output/evaluate_dsec_dav2_rgb",
   "use_scaleshift": true,
   "clip_distance": 80.0,
   "inv_prediction": true,
   "inv_prediction_constant": 1.0,
-  "csv_path": "results/dsec_validation_dav2_rgb.csv"
+  "csv_path": "evaluate_results/dsec_validation_dav2_rgb.csv"
 }
