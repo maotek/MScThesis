@@ -3,7 +3,6 @@
 /Depth-Anything-V2/checkpoints/
 /Depth-Anything-V2/vis_depth
 **.sif
-
 .DS_Store
 **/__pycache__/
 **/*.pyc
@@ -34,3 +33,4 @@ wandb/
 evaluate_output/
 evaluate_results/
 output/
+train_output/
