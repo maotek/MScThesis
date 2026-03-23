@@ -36,7 +36,7 @@ PY
     continue
   fi
 
-  if ! python -m evaluate --config-path "${cfg}" --checkpoint-file epoch_005.pt; then
+  if ! python -m evaluate --config-path "${cfg}"; then
     echo "FAILED ${cfg} (continuing)"
   fi
 done

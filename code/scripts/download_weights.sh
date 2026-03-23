@@ -2,7 +2,7 @@
 set -euo pipefail
 
 host="maoshengjiang@login.daic.tudelft.nl"
-epoch_raw="epoch001"
+epoch_file="epoch_050.pt"
 remote_base="/tudelft.net/staff-umbrella/ThesisMaosheng/MScThesis/code"
 local_base=""
 password=""
@@ -13,40 +13,40 @@ while [[ $# -gt 0 ]]; do
       password="${2:-}"
       shift 2
       ;;
+    --file)
+      epoch_file="${2:-}"
+      shift 2
+      ;;
     *)
       echo "Unexpected argument: $1" >&2
-      echo "Usage: $0 [--password <password>]" >&2
+      echo "Usage: $0 --password <password> [--file <epoch_XXX.pt>]" >&2
       exit 1
       ;;
   esac
 done
-
-if [[ -z "$password" ]]; then
-  password="${HPC_PASS:-}"
-fi
 
 if [[ -z "$local_base" ]]; then
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   local_base="$(cd "$script_dir/.." && pwd)"
 fi
 
-epoch_num=""
-if [[ "$epoch_raw" =~ ^epoch[_-]?([0-9]{1,4})$ ]]; then
-  epoch_num="${BASH_REMATCH[1]}"
-elif [[ "$epoch_raw" =~ ^[0-9]{1,4}$ ]]; then
-  epoch_num="$epoch_raw"
-else
-  echo "Invalid epoch format in script: $epoch_raw (use e.g. epoch050 or 50)" >&2
-  exit 1
-fi
-
-epoch_file="epoch_$(printf "%03d" "$epoch_num").pt"
-
 local_train_output="$local_base/train_output"
 remote_train_output="$remote_base/train_output"
 
 if [[ ! -d "$local_train_output" ]]; then
   echo "Local train_output not found: $local_train_output" >&2
+  exit 1
+fi
+
+if [[ -z "$password" ]]; then
+  echo "Missing required --password <password>" >&2
+  echo "Usage: $0 --password <password> [--file <epoch_XXX.pt>]" >&2
+  exit 1
+fi
+
+if [[ -z "$epoch_file" ]]; then
+  echo "Missing required --file <epoch_XXX.pt>" >&2
+  echo "Usage: $0 --password <password> --file <epoch_XXX.pt>" >&2
   exit 1
 fi
 

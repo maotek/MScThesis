@@ -120,6 +120,7 @@ class DsecSequence(Dataset):
         sequence_step: int = 1,
         self_supervised: bool = False,
         postfix: str = "",
+        use_disparty: bool = False,
     ):
         # Store core parameters
         self.event_representation = event_representation
@@ -127,6 +128,7 @@ class DsecSequence(Dataset):
         self.augmentator = augmentator
         self.self_supervised = self_supervised
         self.postfix = postfix
+        self.use_disparty = use_disparty
 
         # Validate and set sequence parameters
         if sequence_window < 1:
@@ -598,8 +600,7 @@ class DsecSequence(Dataset):
             disparity = self.get_disparity_map(disparity_path)
             
             # Convert disparity to depth if needed (for supervised training)
-            depth = self.disparity2depth(disparity) if not self.self_supervised else disparity
-            # depth = self.disparity2depth(disparity)         
+            depth = self.disparity2depth(disparity) if not self.use_disparty else disparity     
             to_return["depth"] = depth
 
             # Setup event data sources based on available data

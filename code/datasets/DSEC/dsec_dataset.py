@@ -42,6 +42,7 @@ def load_datasets(
     event_representation: EventRepresentation,
     augmentator: Optional[Augmentator],
     load_images: bool = False,
+    use_disparity: bool = False,
     sequence_window: int = 1,
     sequence_step: int = 1,
     self_supervised: bool = False,
@@ -73,6 +74,7 @@ def load_datasets(
             event_representation=event_representation,
             augmentator=augmentator,
             load_images=load_images,
+            use_disparty=use_disparity,
             sequence_window=sequence_window,
             sequence_step=sequence_step,
             self_supervised=self_supervised,
@@ -101,6 +103,7 @@ def fetch_dataloader(config_dataloader: Dict[str, Any], test: bool = False):
     batch_size = config_dataloader.get("batch_size", 1)
     num_workers = config_dataloader.get("num_workers", 1)
     load_images = config_dataloader.get("load_images", False)
+    use_disparity = config_dataloader.get("use_disparity", False)
     concatenate_sequences = config_dataloader.get("concatenate_sequences", False)
     sequence_window = config_dataloader.get("sequence_window", 1)
     sequence_step = config_dataloader.get("sequence_step", 1)
@@ -118,6 +121,7 @@ def fetch_dataloader(config_dataloader: Dict[str, Any], test: bool = False):
         event_representation=event_representation,
         augmentator=augmentator,
         load_images=load_images,
+        use_disparity=use_disparity,
         sequence_window=sequence_window,
         sequence_step=sequence_step,
         self_supervised=self_supervised,

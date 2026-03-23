@@ -18,7 +18,7 @@
         "width": 346
       }
     ],
-    "load_images": true,
+    "load_images": false,
     "batch_size": 1,
     "num_workers": 1,
     "pin_memory": true,
