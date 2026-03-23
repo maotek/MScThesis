@@ -96,6 +96,11 @@ Or shell into it:
 apptainer shell --nv apptainer/image.sif
 ```
 
+List all jobs:
+```bash
+squeue -u maoshengjiang -o "%.18i %.9P %.50j %.8u %.2t %.10M %.6D %R"
+```
+
 # SCP data to DAIC
 
 ## 1. Copy image to DAIC from local machine
