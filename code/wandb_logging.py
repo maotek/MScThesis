@@ -20,6 +20,7 @@ def init_training_wandb(
         entity=entity,
         project="MScThesisV2",
         name=name,
+        settings=wandb.Settings(console="off"),
         config={
             "seed": args.seed,
             "config_path": args.config_path,
