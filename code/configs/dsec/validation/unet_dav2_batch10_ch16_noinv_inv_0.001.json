@@ -2,7 +2,7 @@
   "data_loader": {
     "dataset": "dsec",
     "datapath": "datasets/DSEC/data",
-    "split": "validation",
+    "split": "train",
     "concatenate_sequences": false,
     "event_representation": {
       "representation_type": "voxelgrid",
