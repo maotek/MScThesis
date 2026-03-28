@@ -5,11 +5,11 @@
     "split": "validation",
     "concatenate_sequences": false,
     "event_representation": {
-      "representation_type": "rgb",
-      "normalize": true,
-      "white_frame": false,
+      "representation_type": "voxelgrid",
+      "channels": 3,
       "height": 480,
-      "width": 640
+      "width": 640,
+      "normalize": true
     },
     "preprocessing": [
       {
@@ -18,7 +18,7 @@
         "width": 640
       }
     ],
-    "load_images": true,
+    "load_images": false,
     "batch_size": 1,
     "num_workers": 1,
     "pin_memory": true,
@@ -28,21 +28,20 @@
     "time_window_ms": 50
   },
   "model": {
-    "model_type": "unet_dav2_rgb",
+    "model_type": "fully_conv_dav2",
     "input_channels": 3,
-    "unet_base_channels": 32,
     "dav2_encoder": "vits",
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true,
-    "checkpoint_path": "train_output/train_dsec_unet_dav2_rgb/epoch_025.pt"
+    "checkpoint_path": "train_output/train_dsec_fully_conv_dav2_batch10_ch3_RC/epoch_050.pt"
   },
   "vis_interval": 200,
-  "vis_dir": "evaluate_output/evaluate_dsec_unet_dav2_rgb",
+  "vis_dir": "evaluate_output/evaluate_dsec_fully_conv_dav2_batch10_ch3_RC",
   "use_scaleshift": true,
   "clip_distance": 80.0,
   "inv_prediction": true,
   "inv_prediction_constant": 1.0,
-  "csv_path": "evaluate_results/dsec_validation_unet_dav2_rgb.csv"
+  "csv_path": "evaluate_results/dsec_validation_fully_conv_dav2_batch10_ch3_RC.csv"
 }
