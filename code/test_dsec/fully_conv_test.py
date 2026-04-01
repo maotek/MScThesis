@@ -1,5 +1,6 @@
 import argparse
 import os
+import json
 from pathlib import Path
 from pprint import pprint
 
@@ -107,6 +108,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=100,
         help="Save a visualization every N frames (per sequence).",
+    )
+    parser.add_argument(
+        "--stats-interval",
+        type=int,
+        default=100,
+        help="Write input/feature stats every N frames (0 = disabled).",
+    )
+    parser.add_argument(
+        "--stats-dir",
+        type=str,
+        default="",
+        help="Optional directory for stats JSONL (default: <output-dir>).",
     )
     parser.add_argument(
         "--clip-distance",
@@ -280,6 +293,64 @@ def visualize_sample(
     plt.close(fig)
 
 
+def _tensor_stats(arr) -> dict:
+    if isinstance(arr, torch.Tensor):
+        arr_np = arr.detach().float().cpu().numpy()
+    else:
+        arr_np = np.asarray(arr, dtype=np.float32)
+    stats = {
+        "shape": list(arr_np.shape),
+        "min": float(np.nanmin(arr_np)),
+        "max": float(np.nanmax(arr_np)),
+        "mean": float(np.nanmean(arr_np)),
+        "std": float(np.nanstd(arr_np)),
+    }
+    if arr_np.ndim == 3 and arr_np.shape[0] in (3, 5):
+        ch_stats = {}
+        for ci in range(arr_np.shape[0]):
+            ch = arr_np[ci]
+            ch_stats[f"ch{ci}"] = {
+                "min": float(np.nanmin(ch)),
+                "max": float(np.nanmax(ch)),
+                "mean": float(np.nanmean(ch)),
+                "std": float(np.nanstd(ch)),
+            }
+        stats["per_channel"] = ch_stats
+    return stats
+
+
+def _dav2_preprocess(dav2_model: Dav2, x: torch.Tensor) -> torch.Tensor:
+    # Mirrors Dav2.infer_image_torch preprocessing.
+    orig_hw = x.shape[-2:]
+    h, w = orig_hw
+    scale = max(dav2_model.input_size_height / float(h), dav2_model.input_size_width / float(w))
+    resized_h = int(np.ceil((h * scale) / 14.0) * 14)
+    resized_w = int(np.ceil((w * scale) / 14.0) * 14)
+    x = torch.nn.functional.interpolate(x, size=(resized_h, resized_w), mode="bilinear", align_corners=False)
+    if dav2_model.rgb:
+        x = (x - dav2_model.imagenet_mean) / dav2_model.imagenet_std
+    return x
+
+
+def _dav2_feature_stats(dav2_model: Dav2, x: torch.Tensor) -> dict:
+    # Get intermediate DINOv2 features (reshaped to B,C,H,W) and summarize.
+    x_prep = _dav2_preprocess(dav2_model, x)
+    layer_idx = dav2_model.model.intermediate_layer_idx[dav2_model.model.encoder]
+    feats = dav2_model.model.pretrained.get_intermediate_layers(
+        x_prep, layer_idx, reshape=True, return_class_token=False
+    )
+    stats = {}
+    for i, feat in enumerate(feats):
+        stats[f"layer_{layer_idx[i]}"] = _tensor_stats(feat)
+    return stats
+
+
+def _append_jsonl(path: str, record: dict) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a") as f:
+        f.write(json.dumps(record) + "\n")
+
+
 def update_metrics(
     metrics: dict,
     target: np.ndarray,
@@ -307,6 +378,7 @@ def main() -> None:
     args.dav2_checkpoint = resolve_path(args.dav2_checkpoint)
     args.dae_checkpoint = resolve_path(args.dae_checkpoint)
     args.output_dir = resolve_path(args.output_dir)
+    stats_dir = resolve_path(args.stats_dir) if args.stats_dir else args.output_dir
 
     # Hardcode DSEC dataloader settings to match
     # code/configs/dsec/validation/dae_tencode_DSEC_checkpoint.json
@@ -450,6 +522,17 @@ def main() -> None:
 
             metrics_fc_seq = update_metrics(metrics_fc_seq, target_np, fc_np)
             metrics_dae_seq = update_metrics(metrics_dae_seq, target_np, dae_np)
+
+            if args.stats_interval > 0 and idx % args.stats_interval == 0:
+                stats_record = {
+                    "sequence": seq_name,
+                    "index": idx,
+                    "fc_input_stats": _tensor_stats(fc_recon[0]),
+                    "dae_input_stats": _tensor_stats(events_dae[0]),
+                    "dav2_features_fc": _dav2_feature_stats(dav2_model, fc_recon),
+                    "dav2_features_tencode": _dav2_feature_stats(dav2_model, events_dae),
+                }
+                _append_jsonl(os.path.join(stats_dir, f"{seq_name}.jsonl"), stats_record)
 
             if args.vis_interval > 0 and idx % args.vis_interval == 0:
                 visualize_sample(
