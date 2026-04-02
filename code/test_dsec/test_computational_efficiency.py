@@ -49,14 +49,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-frames",
         type=int,
-        default=100,
-        help="Maximum frames to average timings over.",
-    )
-    parser.add_argument(
-        "--warmup-frames",
-        type=int,
-        default=5,
-        help="Warmup frames (not included in timing).",
+        default=0,
+        help="Maximum frames to average timings over (0 = all frames).",
     )
     parser.add_argument(
         "--num-bins",
@@ -123,13 +117,6 @@ def pick_device(device_str: str) -> torch.device:
     if torch.cuda.is_available():
         return torch.device("cuda")
     return torch.device("cpu")
-
-
-def sync_device(device: torch.device) -> None:
-    if device.type == "cuda":
-        torch.cuda.synchronize(device)
-    elif device.type == "mps" and hasattr(torch, "mps"):
-        torch.mps.synchronize()
 
 
 def build_dataloaders(datapath: str, split: str, num_bins: int) -> Tuple[dict, dict]:
@@ -259,7 +246,8 @@ def run_timing(
     device: torch.device,
     input_getter: Callable[[Dict[str, torch.Tensor]], torch.Tensor],
     max_frames: int,
-    warmup_frames: int,
+    repr_forward: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+    dav2_forward: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
 ) -> Dict[str, object]:
     model = model.to(device)
     model.eval()
@@ -275,68 +263,88 @@ def run_timing(
 
     flops, flops_err = estimate_flops(forward_once, device)
 
-    # Warmup
-    warmup = min(warmup_frames, len(loader))
-    if warmup > 0:
-        for idx, sample in enumerate(loader):
-            if idx >= warmup:
-                break
-            _ = model(input_getter(sample).to(device))
-        sync_device(device)
+    max_eval = len(loader) if max_frames <= 0 else max_frames
+
+    peak_mem_fwd = None
+    peak_mem_train = None
+
+    repr_time = None
+    dav2_time = None
 
     # Forward-only timing
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats()
     total_time = 0.0
+    repr_total = 0.0
+    dav2_total = 0.0
     count = 0
     for idx, sample in enumerate(loader):
-        if idx < warmup:
-            continue
-        if count >= max_frames:
+        if count >= max_eval:
             break
         x = input_getter(sample).to(device)
-        sync_device(device)
-        t0 = time.perf_counter()
-        with torch.no_grad():
-            _ = model(x)
-        sync_device(device)
-        t1 = time.perf_counter()
-        total_time += (t1 - t0)
+        if repr_forward is not None and dav2_forward is not None:
+            with torch.no_grad():
+                t0 = time.perf_counter()
+                repr_out = repr_forward(x)
+                t1 = time.perf_counter()
+                _ = dav2_forward(repr_out)
+                t2 = time.perf_counter()
+            repr_total += (t1 - t0)
+            dav2_total += (t2 - t1)
+            total_time += (t2 - t0)
+        else:
+            t0 = time.perf_counter()
+            with torch.no_grad():
+                _ = model(x)
+            t1 = time.perf_counter()
+            total_time += (t1 - t0)
         count += 1
 
     forward_ms = (total_time / max(count, 1)) * 1000.0
+    if repr_forward is not None and dav2_forward is not None:
+        repr_time = (repr_total / max(count, 1)) * 1000.0
+        dav2_time = (dav2_total / max(count, 1)) * 1000.0
+    if device.type == "cuda":
+        peak_mem_fwd = torch.cuda.max_memory_allocated() / (1024 ** 2)
 
     # Train-step timing (forward + backward)
     model.train()
+    if device.type == "cuda":
+        torch.cuda.reset_peak_memory_stats()
     total_time = 0.0
     count = 0
     for idx, sample in enumerate(loader):
-        if idx < warmup:
-            continue
-        if count >= max_frames:
+        if count >= max_eval:
             break
         x = input_getter(sample).to(device)
-        sync_device(device)
         t0 = time.perf_counter()
         out = model(x)
         loss = out.mean()
         model.zero_grad(set_to_none=True)
         loss.backward()
-        sync_device(device)
         t1 = time.perf_counter()
         total_time += (t1 - t0)
         count += 1
 
     train_step_ms = (total_time / max(count, 1)) * 1000.0
+    if device.type == "cuda":
+        peak_mem_train = torch.cuda.max_memory_allocated() / (1024 ** 2)
 
     total_params, trainable_params = count_params(model)
 
     return {
         "name": name,
         "forward_ms": forward_ms,
+        "repr_ms": repr_time,
+        "dav2_ms": dav2_time,
         "train_step_ms": train_step_ms,
         "total_params": total_params,
         "trainable_params": trainable_params,
+        "trainable_ratio": (trainable_params / total_params) if total_params > 0 else 0.0,
         "flops": flops,
         "flops_err": flops_err,
+        "peak_mem_fwd": peak_mem_fwd,
+        "peak_mem_train": peak_mem_train,
     }
 
 
@@ -352,7 +360,7 @@ def main() -> None:
     args.unet_checkpoint = resolve_path(args.unet_checkpoint)
     args.output_path = resolve_path(args.output_path)
 
-    # Build dataloaders (matching fully_conv_test settings)
+    # Build dataloaders
     data_loaders_dae, data_loaders_voxel = build_dataloaders(
         args.datapath, args.split, args.num_bins
     )
@@ -465,7 +473,6 @@ def main() -> None:
             device=device,
             input_getter=get_events_dae,
             max_frames=args.max_frames,
-            warmup_frames=args.warmup_frames,
         )
     )
 
@@ -477,7 +484,8 @@ def main() -> None:
             device=device,
             input_getter=get_events_voxel,
             max_frames=args.max_frames,
-            warmup_frames=args.warmup_frames,
+            repr_forward=fc_full.fully_conv,
+            dav2_forward=fc_full.dav2,
         )
     )
 
@@ -489,7 +497,8 @@ def main() -> None:
             device=device,
             input_getter=get_events_voxel,
             max_frames=args.max_frames,
-            warmup_frames=args.warmup_frames,
+            repr_forward=fc_frozen.fully_conv,
+            dav2_forward=fc_frozen.dav2,
         )
     )
 
@@ -501,7 +510,8 @@ def main() -> None:
             device=device,
             input_getter=get_events_voxel,
             max_frames=args.max_frames,
-            warmup_frames=args.warmup_frames,
+            repr_forward=unet_full.unet,
+            dav2_forward=unet_full.dav2,
         )
     )
 
@@ -513,16 +523,17 @@ def main() -> None:
             device=device,
             input_getter=get_events_voxel,
             max_frames=args.max_frames,
-            warmup_frames=args.warmup_frames,
+            repr_forward=unet_frozen.unet,
+            dav2_forward=unet_frozen.dav2,
         )
     )
 
     # Print summary table
     print("\nSummary (per-frame averages)")
     header = (
-        "| Model | Forward ms | Train-step ms | Trainable params | Total params | FLOPs |"
+        "| Model | Forward ms | Repr ms | DAv2 ms | Train-step ms | Peak GPU MB | Trainable/Total params | FLOPs |"
     )
-    sep = "|---|---:|---:|---:|---:|---:|"
+    sep = "|---|---:|---:|---:|---:|---:|---:|---:|"
     print(header)
     print(sep)
 
@@ -533,13 +544,26 @@ def main() -> None:
             flops_str = f"{r['flops'] / 1e9:.3f} GFLOPs"
         elif r["flops_err"]:
             flops_str = f"N/A ({r['flops_err']})"
+        if r["peak_mem_fwd"] is None and r["peak_mem_train"] is None:
+            peak_mem_str = "N/A"
+        else:
+            peak_mem = max(
+                val for val in (r["peak_mem_fwd"], r["peak_mem_train"]) if val is not None
+            )
+            peak_mem_str = f"{peak_mem:.1f}"
+        trainable_ratio_str = f"{r['trainable_ratio'] * 100:.2f}%"
+        trainable_total_str = f"{r['trainable_params']:,} / {r['total_params']:,} ({trainable_ratio_str})"
+        repr_ms_str = "N/A" if r["repr_ms"] is None else f"{r['repr_ms']:.3f}"
+        dav2_ms_str = "N/A" if r["dav2_ms"] is None else f"{r['dav2_ms']:.3f}"
         line = (
-            "| {name} | {fwd:.3f} | {train:.3f} | {trainable:,} | {total:,} | {flops} |".format(
+            "| {name} | {fwd:.3f} | {repr_ms} | {dav2_ms} | {train:.3f} | {peak_mem} | {trainable_total} | {flops} |".format(
                 name=r["name"],
                 fwd=r["forward_ms"],
+                repr_ms=repr_ms_str,
+                dav2_ms=dav2_ms_str,
                 train=r["train_step_ms"],
-                trainable=r["trainable_params"],
-                total=r["total_params"],
+                peak_mem=peak_mem_str,
+                trainable_total=trainable_total_str,
                 flops=flops_str,
             )
         )
