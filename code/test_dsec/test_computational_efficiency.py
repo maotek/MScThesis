@@ -119,6 +119,11 @@ def pick_device(device_str: str) -> torch.device:
     return torch.device("cpu")
 
 
+def sync_cuda(device: torch.device) -> None:
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+
+
 def build_dataloaders(datapath: str, split: str, num_bins: int) -> Tuple[dict, dict]:
     preprocess_config = [
         {"preprocessing_type": "CenterCrop", "height": 320, "width": 640}
@@ -278,24 +283,29 @@ def run_timing(
     repr_total = 0.0
     dav2_total = 0.0
     count = 0
-    for idx, sample in enumerate(loader):
+    for sample in loader:
         if count >= max_eval:
             break
         x = input_getter(sample).to(device)
         if repr_forward is not None and dav2_forward is not None:
             with torch.no_grad():
+                sync_cuda(device)
                 t0 = time.perf_counter()
                 repr_out = repr_forward(x)
+                sync_cuda(device)
                 t1 = time.perf_counter()
                 _ = dav2_forward(repr_out)
+                sync_cuda(device)
                 t2 = time.perf_counter()
             repr_total += (t1 - t0)
             dav2_total += (t2 - t1)
             total_time += (t2 - t0)
         else:
+            sync_cuda(device)
             t0 = time.perf_counter()
             with torch.no_grad():
                 _ = model(x)
+            sync_cuda(device)
             t1 = time.perf_counter()
             total_time += (t1 - t0)
         count += 1
@@ -313,15 +323,17 @@ def run_timing(
         torch.cuda.reset_peak_memory_stats()
     total_time = 0.0
     count = 0
-    for idx, sample in enumerate(loader):
+    for sample in loader:
         if count >= max_eval:
             break
         x = input_getter(sample).to(device)
+        sync_cuda(device)
         t0 = time.perf_counter()
         out = model(x)
         loss = out.mean()
         model.zero_grad(set_to_none=True)
         loss.backward()
+        sync_cuda(device)
         t1 = time.perf_counter()
         total_time += (t1 - t0)
         count += 1
