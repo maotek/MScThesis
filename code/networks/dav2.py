@@ -38,6 +38,7 @@ class Dav2(torch.nn.Module):
         input_size_height: int = 266,
         input_size_width: int = 350,
         rgb: bool = False,
+        use_torch_preprocess: bool = True,
     ) -> None:
         super().__init__()
         assert encoder in MODEL_CONFIGS, f"Unknown encoder {encoder}"
@@ -46,6 +47,7 @@ class Dav2(torch.nn.Module):
         self.input_size_width = input_size_width
         self.device = device
         self.rgb = rgb
+        self.use_torch_preprocess = bool(use_torch_preprocess)
 
         if not os.path.isfile(checkpoint):
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint}")
@@ -74,6 +76,8 @@ class Dav2(torch.nn.Module):
         assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
 
         normalize_imagenet = bool(self.rgb)
+        if self.use_torch_preprocess:
+            return self.infer_image_torch(x, normalize_imagenet=normalize_imagenet)
         if x.requires_grad:
             return self.infer_image_torch(x, normalize_imagenet=normalize_imagenet)
         return self.infer_image(x, normalize_imagenet=normalize_imagenet)
