@@ -87,6 +87,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
+            normalize_imagenet=True,  # For RGB input, apply ImageNet normalization.
         )
     elif str(model_config.get("model_type", "")).lower() == "unet_dav2":
         return UNetDav2(
@@ -99,6 +100,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
+            normalize_imagenet=False,
         )
 
 
