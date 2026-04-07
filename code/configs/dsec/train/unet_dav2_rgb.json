@@ -35,7 +35,8 @@
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
     "input_size_width": 350,
     "input_size_height": 266,
-    "freeze_dav2": true
+    "freeze_dav2": true,
+    "normalize_imagenet": true
   },
   "training": {
     "epochs": 50,
