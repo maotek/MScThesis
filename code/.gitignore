@@ -34,3 +34,5 @@ evaluate_output/
 evaluate_results/
 output/
 train_output/
+test_mvsec_output/
+test_dsec_output/
