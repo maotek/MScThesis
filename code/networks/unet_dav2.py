@@ -156,6 +156,7 @@ class UNetDav2(torch.nn.Module):
         input_size_height: int = 266,
         freeze_dav2: bool = True,
         device: torch.device = None,
+        normalize_imagenet: bool = False,
     ) -> None:
         super().__init__()
         self.device = device
@@ -206,7 +207,7 @@ class UNetDav2(torch.nn.Module):
             device=self.device,
             input_size_width=input_size_width,
             input_size_height=input_size_height,
-            rgb=False,
+            normalize_imagenet=normalize_imagenet
         )
 
         self.set_dav2_frozen(self.freeze_dav2)
