@@ -32,6 +32,7 @@ from losses import normalized_depth_scale_and_shift
 from util import (
     depth_to_colormap,
     save_depth_colormap,
+    save_depth_colormap_with_cbar,
     save_rgb,
     save_voxelgrid,
     voxelgrid_to_uint8,
@@ -111,7 +112,6 @@ def setup_device_and_seeds(args: argparse.Namespace) -> torch.device:
     np.random.seed(args.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # device = torch.device("mps") # testing
     if device.type == "cuda":
         torch.cuda.manual_seed(args.seed)
     return device
@@ -155,7 +155,7 @@ def save_visualization(
     else:
         save_voxelgrid(events_path, events_chw)
 
-    save_depth_colormap(os.path.join(seq_dir, f"{idx:05d}_pred.png"), pred_np)
+    save_depth_colormap_with_cbar(os.path.join(seq_dir, f"{idx:05d}_pred.png"), pred_np)
     if vis_temp is not None:
         save_rgb(os.path.join(seq_dir, f"{idx:05d}_vis_temp.png"), vis_temp.detach().cpu().squeeze(0))
 
@@ -202,8 +202,9 @@ def evaluate_sequence(
         if inv_prediction:
             # Convert from relative inverse depth to depth
             pred_depth = 1.0 / (pred_depth + inv_prediction_constant)
-    
-        pred_depth = pred_depth.squeeze(1)  # (1,320,640)
+
+        pred_depth_raw = pred_depth.squeeze(1)  # (1,320,640)
+        pred_depth = pred_depth_raw
         target_proc_t = prepare_target_data_torch(target_depth_t, clip_distance)
 
         # Apply scale-shift normalization to match ground truth
@@ -236,7 +237,7 @@ def evaluate_sequence(
                 seq_name=seq_name,
                 idx=idx,
                 events=events,
-                pred_np=pred_depth.detach().cpu().squeeze().numpy(),
+                pred_np=pred_depth_raw.detach().cpu().squeeze().numpy(),
                 vis_dir=vis_dir,
                 vis_temp=getattr(model, "vis_temp", None),
             )
@@ -268,15 +269,14 @@ def accumulate_metrics(target: Dict[str, float], source: Dict[str, float]) -> Di
 
 def fetch_model(model_config: Dict[str, object], device: torch.device, representation: str = "") -> object:
     model_name = str(model_config["model_type"])
-
     if model_name == "dav2":
         return Dav2(
             encoder=str(model_config.get("encoder", "vits")),
             checkpoint=model_config.get("checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
             input_size_width=int(model_config.get("input_size_width", 350)),
             input_size_height=int(model_config.get("input_size_height", 266)),
-            # If RGB representation, set rgb=True to apply ImageNet normalization.
-            rgb=(representation.lower() == "rgb"),
+            # If RGB representation, set normalize_imagenet=True to apply ImageNet normalization.
+            normalize_imagenet=(representation.lower() == "rgb"),
             device=device,
         )
     elif model_name == "e2vid_dav2":
@@ -329,6 +329,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
         )
         ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dav2", "epoch_050.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
@@ -371,6 +372,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", True)),  # For RGB input, apply ImageNet normalization.
         )
         ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dav2_rgb", "epoch_030.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
