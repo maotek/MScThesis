@@ -22,7 +22,7 @@ def main():
     )
     parser.add_argument("--index", type=int, default=0, help="Sample index in the sequence")
     parser.add_argument("--time-window-ms", type=int, default=50, help="Event window in milliseconds")
-    parser.add_argument("--output-dir", default="output/test_mvsec_sequence", help="Where to save PNGs")
+    parser.add_argument("--output-dir", default="test_mvsec_output/mvsec_sequence", help="Where to save PNGs")
     parser.add_argument(
         "--split",
         choices=["train", "validation", "test"],
