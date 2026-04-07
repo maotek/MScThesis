@@ -100,7 +100,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="output/test_fully_conv_vs_dae",
+        default="test_dsec_output/test_fully_conv_vs_dae",
         help="Where to save visualizations.",
     )
     parser.add_argument(

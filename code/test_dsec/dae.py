@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
         default=50,
         help="Event window size for building tencode representations.",
     )
-    parser.add_argument("--output-dir", type=str, default="output/test_dae_on_dsec", help="Where to save visualizations.")
+    parser.add_argument("--output-dir", type=str, default="test_dsec_output/test_dae_on_dsec", help="Where to save visualizations.")
     return parser.parse_args()
 
 

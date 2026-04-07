@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
         default=os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar"),
         help="Optional E2VID checkpoint path. Defaults to models/rpg_e2vid/pretrained/E2VID_lightweight.pth.tar",
     )
-    parser.add_argument("--output-dir", type=str, default="output/test_e2vid_on_dsec", help="Where to save visualizations.")
+    parser.add_argument("--output-dir", type=str, default="test_dsec_output/test_e2vid_on_dsec", help="Where to save visualizations.")
     return parser.parse_args()
 
 

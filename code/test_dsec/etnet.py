@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
         help="ET-Net checkpoint path",
     )
     parser.add_argument("--use-minmax-norm", action="store_true", help="Apply ET-Net's optional min-max normalization to outputs.")
-    parser.add_argument("--output-dir", type=str, default="output/test_etnet_on_dsec", help="Where to save visualizations.")
+    parser.add_argument("--output-dir", type=str, default="test_dsec_output/test_etnet_on_dsec", help="Where to save visualizations.")
     return parser.parse_args()
 
 

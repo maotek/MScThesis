@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="output/test_etnet_dav2_on_dsec",
+        default="test_dsec_output/test_etnet_dav2_on_dsec",
         help="Where to save visualizations.",
     )
     parser.add_argument(

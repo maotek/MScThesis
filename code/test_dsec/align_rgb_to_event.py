@@ -13,7 +13,7 @@ def ensure_dir(path: str) -> str:
 
 def main():
     sequence_path = "datasets/DSEC/data/validation/interlaken_00_g"  # Change as needed
-    output_dir = ensure_dir("output/test_align_rgb_to_event")
+    output_dir = ensure_dir("test_dsec_output/test_align_rgb_to_event")
     idx = 100  # Change as needed
 
     # Load sequence

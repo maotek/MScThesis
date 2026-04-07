@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional E2Depth checkpoint path. Defaults to models/rpg_e2depth/pretrained/E2DEPTH_si_grad_loss_mixed.pth.tar",
     )
-    parser.add_argument("--output-dir", type=str, default="output/test_e2depth_on_dsec", help="Where to save visualizations.")
+    parser.add_argument("--output-dir", type=str, default="test_dsec_output/test_e2depth_on_dsec", help="Where to save visualizations.")
     return parser.parse_args()
 
 

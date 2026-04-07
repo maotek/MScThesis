@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional checkpoint path. Defaults to models/dav2/checkpoints/depth_anything_v2_<encoder>.pth",
     )
-    parser.add_argument("--output-dir", type=str, default="output/test_dav2_rgb_on_dsec", help="Where to save visualizations.")
+    parser.add_argument("--output-dir", type=str, default="test_dsec_output/test_dav2_rgb_on_dsec", help="Where to save visualizations.")
     return parser.parse_args()
 
 

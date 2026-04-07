@@ -103,7 +103,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-path",
         type=str,
-        default="output/test_computational_efficiency/summary.md",
+        default="test_dsec_output/test_computational_efficiency/summary.md",
         help="Where to save the summary table (markdown).",
     )
     return parser.parse_args()
