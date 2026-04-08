@@ -83,6 +83,13 @@ def parse_args() -> argparse.Namespace:
         help="Pretrained DAv2 checkpoint.",
     )
     parser.add_argument(
+        "--dav2-encoder",
+        type=str,
+        default="vits",
+        choices=["vits", "vitb", "vitl"],
+        help="DAv2 encoder backbone (vits/vitb/vitl).",
+    )
+    parser.add_argument(
         "--fully-conv-checkpoint",
         type=str,
         default="train_output/train_dsec_fully_conv_dav2_batch10_RC/epoch_050.pt",
@@ -408,7 +415,7 @@ def main() -> None:
     # FullyConv + DAv2
     fc_full = FullyConvDav2(
         input_channels=args.num_bins,
-        dav2_encoder="vits",
+        dav2_encoder=args.dav2_encoder,
         dav2_checkpoint=args.dav2_checkpoint,
         input_size_width=350,
         input_size_height=266,
@@ -419,7 +426,7 @@ def main() -> None:
 
     fc_frozen = FullyConvDav2(
         input_channels=args.num_bins,
-        dav2_encoder="vits",
+        dav2_encoder=args.dav2_encoder,
         dav2_checkpoint=args.dav2_checkpoint,
         input_size_width=350,
         input_size_height=266,
@@ -433,7 +440,7 @@ def main() -> None:
         input_channels=args.num_bins,
         unet_base_channels=16,
         unet_type="small",
-        dav2_encoder="vits",
+        dav2_encoder=args.dav2_encoder,
         dav2_checkpoint=args.dav2_checkpoint,
         input_size_width=350,
         input_size_height=266,
@@ -446,7 +453,7 @@ def main() -> None:
         input_channels=args.num_bins,
         unet_base_channels=16,
         unet_type="small",
-        dav2_encoder="vits",
+        dav2_encoder=args.dav2_encoder,
         dav2_checkpoint=args.dav2_checkpoint,
         input_size_width=350,
         input_size_height=266,

@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=test_comp_eff
-#SBATCH --output=test_comp_eff_%j.out
-#SBATCH --error=test_comp_eff_%j.err
+#SBATCH --job-name=test_comp_eff_vitl
+#SBATCH --output=test_comp_eff_vitl_%j.out
+#SBATCH --error=test_comp_eff_vitl_%j.err
 #SBATCH --account=ewi-insy-prb
 #SBATCH --partition=insy,general
 #SBATCH --qos=short
@@ -19,4 +19,6 @@ cd MScThesis/code
 
 apptainer exec --nv ../../apptainer/image.sif \
   python -m test_dsec.test_computational_efficiency \
-    --output-path output/test_computational_efficiency/summary.md
+    --dav2-encoder vitl \
+    --dav2-checkpoint models/dav2/checkpoints/depth_anything_v2_vitl.pth \
+    --output-path test_dsec_output/test_computational_efficiency/summary_vitl.md
