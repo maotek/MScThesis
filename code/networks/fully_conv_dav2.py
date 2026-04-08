@@ -64,6 +64,9 @@ class FullyConvDav2(torch.nn.Module):
         print("[FullyConvDav2] DAv2 frozen:", self.freeze_dav2)
         print("[FullyConvDav2] Device:", self.device)
         print("[FullyConvDav2] FullyConv output channels:", self.fc_output_channels)
+        print("[FullyConvDav2] Input size (H,W):", (input_size_height, input_size_width))
+        print("[FullyConvDav2] Normalize ImageNet:", normalize_imagenet)
+        print("[FullyConvDav2] FullyConv input channels:", self.in_channels)
 
 
     def set_dav2_frozen(self, freeze: bool = True) -> None:

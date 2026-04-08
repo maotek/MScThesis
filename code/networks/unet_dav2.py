@@ -193,6 +193,8 @@ class UNetDav2(torch.nn.Module):
         print("[UNetDav2] Device:", self.device)
         print("[UNetDav2] UNet type:", unet_type)
         print("[UNetDav2] UNet output channels:", self.unet_output_channels)
+        print("[UNetDav2] Normalize ImageNet:", normalize_imagenet)
+        print("[UNetDav2] Input size (H,W):", (input_size_height, input_size_width))
 
 
     def set_dav2_frozen(self, freeze: bool = True) -> None:
