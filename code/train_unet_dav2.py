@@ -7,6 +7,7 @@ from typing import Dict, Tuple
 import numpy as np
 import torch
 import tqdm
+from pprint import pprint
 
 from util import save_depth_colormap, save_rgb
 from train_validation import validate_epoch
@@ -48,9 +49,12 @@ def load_config(config_path: str) -> Tuple[Dict[str, object], Dict[str, object],
     data_loader_config = dict(config["data_loader"])
     model_config = dict(config["model"])
     training_config = dict(config["training"])
-    print("Data Loader Config:", data_loader_config)
-    print("Model Config:", model_config)
-    print("Training Config:", training_config)
+    print("Data Loader Config:")
+    pprint(data_loader_config, sort_dicts=False)
+    print("Model Config:")
+    pprint(model_config, sort_dicts=False)
+    print("Training Config:")
+    pprint(training_config, sort_dicts=False)
     return data_loader_config, model_config, training_config
 
 
@@ -75,6 +79,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
+            output_channels=int(model_config.get("output_channels", 3)),
         )
     elif str(model_config.get("model_type", "")).lower() == "unet_dav2_rgb":
         return UNetDav2(
@@ -87,7 +92,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
-            normalize_imagenet=True,  # For RGB input, apply ImageNet normalization.
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", True)),  # For RGB input, apply ImageNet normalization.
         )
     elif str(model_config.get("model_type", "")).lower() == "unet_dav2":
         return UNetDav2(
@@ -100,7 +105,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
-            normalize_imagenet=False,
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),  # For event-based input, do not apply ImageNet normalization.
         )
 
 
