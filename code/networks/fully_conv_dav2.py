@@ -21,17 +21,18 @@ class FullyConvDav2(torch.nn.Module):
         input_size_height: int = 266,
         freeze_dav2: bool = True,
         device: torch.device = None,
-        output_channels: int = 3,
+        fc_output_channels: int = 3,
+        normalize_imagenet: bool = False,
     ) -> None:
         super().__init__()
         self.device = device
         self.freeze_dav2 = bool(freeze_dav2)
         self.in_channels = input_channels
-        self.output_channels = output_channels
+        self.fc_output_channels = fc_output_channels
 
         self.vis_temp = None
 
-        self.fully_conv = FullyConv(in_channels=input_channels, out_channels=output_channels)
+        self.fully_conv = FullyConv(in_channels=input_channels, out_channels=fc_output_channels)
 
         if dav2_checkpoint is None:
             dav2_checkpoint = str(
@@ -51,7 +52,7 @@ class FullyConvDav2(torch.nn.Module):
             device=self.device,
             input_size_width=input_size_width,
             input_size_height=input_size_height,
-            rgb=False,
+            normalize_imagenet=normalize_imagenet,
         )
 
         self.set_dav2_frozen(self.freeze_dav2)
@@ -62,6 +63,8 @@ class FullyConvDav2(torch.nn.Module):
         print("[FullyConvDav2] DAv2 encoder:", dav2_encoder)
         print("[FullyConvDav2] DAv2 frozen:", self.freeze_dav2)
         print("[FullyConvDav2] Device:", self.device)
+        print("[FullyConvDav2] FullyConv output channels:", self.fc_output_channels)
+
 
     def set_dav2_frozen(self, freeze: bool = True) -> None:
         self.freeze_dav2 = bool(freeze)
@@ -74,6 +77,10 @@ class FullyConvDav2(torch.nn.Module):
         events = events.to(self.device)
         # The fully_conv network outputs a 3-channel image-like tensor
         reconstructed_rgb = self.fully_conv(events)
+
+        # If the output is 1-channel, repeat it to make it 3-channel for DAV2
+        if self.fc_output_channels == 1:
+            reconstructed_rgb = reconstructed_rgb.repeat(1, 3, 1, 1)
 
         # Store for visualization if needed
         self.vis_temp = reconstructed_rgb.detach().cpu()

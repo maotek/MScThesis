@@ -330,6 +330,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
             normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
+            unet_output_channels=int(model_config.get("unet_output_channels", 3)),
         )
         ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dav2", "epoch_050.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
@@ -350,6 +351,8 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
+            fc_output_channels=int(model_config.get("fc_output_channels", 3)),
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
         )
         ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_dsec_fully_conv_dav2_batch10", "epoch_050.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
@@ -373,6 +376,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
             normalize_imagenet=bool(model_config.get("normalize_imagenet", True)),  # For RGB input, apply ImageNet normalization.
+            unet_output_channels=int(model_config.get("unet_output_channels", 3)),
         )
         ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dav2_rgb", "epoch_030.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)

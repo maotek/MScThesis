@@ -36,7 +36,8 @@
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true,
-    "normalize_imagenet": true
+    "normalize_imagenet": true,
+    "unet_output_channels": 3
   },
   "training": {
     "epochs": 50,

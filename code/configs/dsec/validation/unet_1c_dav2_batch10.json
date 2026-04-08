@@ -37,7 +37,9 @@
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true,
-    "checkpoint_path": "train_output/train_dsec_unet_1c_dav2_batch10/epoch_050.pt"
+    "checkpoint_path": "train_output/train_dsec_unet_1c_dav2_batch10/epoch_050.pt",
+    "normalize_imagenet": false,
+    "unet_output_channels": 1
   },
   "vis_interval": 200,
   "vis_dir": "evaluate_output/evaluate_dsec_unet_1c_dav2_batch10",

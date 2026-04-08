@@ -39,7 +39,7 @@ class _ConvBlock2(torch.nn.Module):
 class SmallUNet(torch.nn.Module):
     """Small UNet mapping event tensors to 3-channel DAV2 input."""
 
-    def __init__(self, in_channels: int = 5, base_channels: int = 32) -> None:
+    def __init__(self, in_channels: int = 5, base_channels: int = 32, out_channels: int = 3) -> None:
         super().__init__()
         self.enc1 = _ConvBlock(in_channels, base_channels)
         self.enc2 = _ConvBlock(base_channels, base_channels * 2)
@@ -47,7 +47,7 @@ class SmallUNet(torch.nn.Module):
         self.dec2 = _ConvBlock(base_channels * 4 + base_channels * 2, base_channels * 2)
         self.dec1 = _ConvBlock(base_channels * 2 + base_channels, base_channels)
         self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
-        self.out_conv = torch.nn.Conv2d(base_channels, 3, kernel_size=1)
+        self.out_conv = torch.nn.Conv2d(base_channels, out_channels, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         e1 = self.enc1(x)
@@ -63,37 +63,10 @@ class SmallUNet(torch.nn.Module):
         return torch.sigmoid(self.out_conv(d1))
     
 
-class SmallUNet1C(torch.nn.Module):
-    """Small UNet mapping event tensors to 1-channel DAV2 input."""
-
-    def __init__(self, in_channels: int = 5, base_channels: int = 32) -> None:
-        super().__init__()
-        self.enc1 = _ConvBlock(in_channels, base_channels)
-        self.enc2 = _ConvBlock(base_channels, base_channels * 2)
-        self.bottleneck = _ConvBlock(base_channels * 2, base_channels * 4)
-        self.dec2 = _ConvBlock(base_channels * 4 + base_channels * 2, base_channels * 2)
-        self.dec1 = _ConvBlock(base_channels * 2 + base_channels, base_channels)
-        self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
-        self.out_conv = torch.nn.Conv2d(base_channels, 1, kernel_size=1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        e1 = self.enc1(x)
-        e2 = self.enc2(self.pool(e1))
-        b = self.bottleneck(self.pool(e2))
-
-        d2 = F.interpolate(b, size=e2.shape[-2:], mode="bilinear", align_corners=False)
-        d2 = self.dec2(torch.cat([d2, e2], dim=1))
-
-        d1 = F.interpolate(d2, size=e1.shape[-2:], mode="bilinear", align_corners=False)
-        d1 = self.dec1(torch.cat([d1, e1], dim=1))
-
-        return torch.sigmoid(self.out_conv(d1))
-
-
 class SmallUNet2(torch.nn.Module):
     """Small UNet mapping event tensors to 3-channel DAV2 input."""
 
-    def __init__(self, in_channels: int = 5, base_channels: int = 32) -> None:
+    def __init__(self, in_channels: int = 5, base_channels: int = 32, out_channels: int = 3) -> None:
         super().__init__()
         self.enc1 = _ConvBlock2(in_channels, base_channels)
         self.enc2 = _ConvBlock2(base_channels, base_channels * 2)
@@ -101,7 +74,7 @@ class SmallUNet2(torch.nn.Module):
         self.dec2 = _ConvBlock2(base_channels * 4 + base_channels * 2, base_channels * 2)
         self.dec1 = _ConvBlock2(base_channels * 2 + base_channels, base_channels)
         self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
-        self.out_conv = torch.nn.Conv2d(base_channels, 3, kernel_size=1)
+        self.out_conv = torch.nn.Conv2d(base_channels, out_channels, kernel_size=1)
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -121,13 +94,13 @@ class SmallUNet2(torch.nn.Module):
 class SmallUNet3(torch.nn.Module):
     """Small UNet variant with one encoder and one decoder stage."""
 
-    def __init__(self, in_channels: int = 5, base_channels: int = 32) -> None:
+    def __init__(self, in_channels: int = 5, base_channels: int = 32, out_channels: int = 3) -> None:
         super().__init__()
         self.enc1 = _ConvBlock(in_channels, base_channels)
         self.bottleneck = _ConvBlock(base_channels, base_channels * 2)
         self.dec1 = _ConvBlock(base_channels * 2 + base_channels, base_channels)
         self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
-        self.out_conv = torch.nn.Conv2d(base_channels, 3, kernel_size=1)
+        self.out_conv = torch.nn.Conv2d(base_channels, out_channels, kernel_size=1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         e1 = self.enc1(x)
@@ -157,11 +130,13 @@ class UNetDav2(torch.nn.Module):
         freeze_dav2: bool = True,
         device: torch.device = None,
         normalize_imagenet: bool = False,
+        unet_output_channels: int = 3,
     ) -> None:
         super().__init__()
         self.device = device
         self.freeze_dav2 = bool(freeze_dav2)
         self.in_channels = input_channels
+        self.unet_output_channels = unet_output_channels
         self.unet_type = unet_type
 
         self.vis_temp = None
@@ -170,21 +145,19 @@ class UNetDav2(torch.nn.Module):
             self.unet = SmallUNet(
                 in_channels=input_channels,
                 base_channels=unet_base_channels,
+                out_channels=unet_output_channels
             )
         elif unet_type == "small2":
             self.unet = SmallUNet2(
                 in_channels=input_channels,
                 base_channels=unet_base_channels,
+                out_channels=unet_output_channels
             )
         elif unet_type == "small3":
             self.unet = SmallUNet3(
                 in_channels=input_channels,
                 base_channels=unet_base_channels,
-            )
-        elif unet_type == "small1c":
-            self.unet = SmallUNet1C(
-                in_channels=input_channels,
-                base_channels=unet_base_channels,
+                out_channels=unet_output_channels
             )
         else:
             raise ValueError(f"Unsupported unet_type '{unet_type}'")
@@ -218,6 +191,8 @@ class UNetDav2(torch.nn.Module):
         print("[UNetDav2] DAv2 encoder:", dav2_encoder)
         print("[UNetDav2] DAv2 frozen:", self.freeze_dav2)
         print("[UNetDav2] Device:", self.device)
+        print("[UNetDav2] UNet type:", unet_type)
+        print("[UNetDav2] UNet output channels:", self.unet_output_channels)
 
 
     def set_dav2_frozen(self, freeze: bool = True) -> None:
@@ -231,7 +206,8 @@ class UNetDav2(torch.nn.Module):
         events = events.to(self.device)
         unet_rgb = self.unet(events)
 
-        if self.unet_type == "small1c":
+        # If the UNet output is 1-channel, repeat it to make it 3-channel for DAV2
+        if self.unet_output_channels == 1:
             unet_rgb = unet_rgb.repeat(1, 3, 1, 1)
 
         if True:

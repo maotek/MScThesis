@@ -79,7 +79,8 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             input_size_height=int(model_config.get("input_size_height", 266)),
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
-            output_channels=int(model_config.get("output_channels", 3)),
+            fc_output_channels=int(model_config.get("fc_output_channels", 3)),
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),  # For event-based input, do not apply ImageNet normalization.
         )
     elif str(model_config.get("model_type", "")).lower() == "unet_dav2_rgb":
         return UNetDav2(
@@ -93,6 +94,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
             normalize_imagenet=bool(model_config.get("normalize_imagenet", True)),  # For RGB input, apply ImageNet normalization.
+            unet_output_channels=int(model_config.get("unet_output_channels", 3)),
         )
     elif str(model_config.get("model_type", "")).lower() == "unet_dav2":
         return UNetDav2(
@@ -106,6 +108,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             freeze_dav2=bool(model_config.get("freeze_dav2", True)),
             device=device,
             normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),  # For event-based input, do not apply ImageNet normalization.
+            unet_output_channels=int(model_config.get("unet_output_channels", 3)),
         )
 
 
