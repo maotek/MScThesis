@@ -21,15 +21,17 @@ class FullyConvDav2(torch.nn.Module):
         input_size_height: int = 266,
         freeze_dav2: bool = True,
         device: torch.device = None,
+        output_channels: int = 3,
     ) -> None:
         super().__init__()
         self.device = device
         self.freeze_dav2 = bool(freeze_dav2)
         self.in_channels = input_channels
+        self.output_channels = output_channels
 
         self.vis_temp = None
 
-        self.fully_conv = FullyConv(in_channels=input_channels)
+        self.fully_conv = FullyConv(in_channels=input_channels, out_channels=output_channels)
 
         if dav2_checkpoint is None:
             dav2_checkpoint = str(

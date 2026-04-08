@@ -52,7 +52,7 @@ class ConvBlock(nn.Module):
 
 
 class FullyConv(nn.Module):
-    def __init__(self, in_channels: int = 5) -> None:
+    def __init__(self, in_channels: int = 5, out_channels: int = 3) -> None:
         super().__init__()
 
         self.g_conv1 = ConvBlock(in_channels, 32, rate=1)
@@ -65,7 +65,7 @@ class FullyConv(nn.Module):
         self.g_conv8 = ConvBlock(32, 32, rate=128)
         self.g_conv9 = ConvBlock(32, 32, rate=1)
 
-        self.g_conv_last = nn.Conv2d(32, 3, kernel_size=1, stride=1, padding=0, bias=True)
+        self.g_conv_last = nn.Conv2d(32, out_channels, kernel_size=1, stride=1, padding=0, bias=True)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         net = self.g_conv1(input)

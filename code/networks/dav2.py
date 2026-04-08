@@ -55,6 +55,7 @@ class Dav2(torch.nn.Module):
         print("[DAv2] Using encoder:", encoder)
         print("[DAv2] Input size (H,W):", (self.input_size_height, self.input_size_width))
         print("[DAv2] Device:", self.device)
+        print("[DAv2] Normalize ImageNet:", self.normalize_imagenet)
 
         cfg = MODEL_CONFIGS[encoder]
         self.model = DepthAnythingV2(encoder=encoder, **cfg)
