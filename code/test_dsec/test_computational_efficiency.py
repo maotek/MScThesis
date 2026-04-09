@@ -72,6 +72,13 @@ def parse_args() -> argparse.Namespace:
         help="DAE pretrained checkpoint (DSEC finetuned).",
     )
     parser.add_argument(
+        "--dae-encoder",
+        type=str,
+        default="",
+        choices=["", "vits", "vitb", "vitl", "vitg"],
+        help="Optional DAE encoder override (vits/vitb/vitl/vitg). Defaults to --dav2-encoder.",
+    )
+    parser.add_argument(
         "--dae-nopretrain",
         action="store_true",
         help="Skip loading DAE checkpoint (use random weights) if checkpoint not present.",
@@ -398,8 +405,10 @@ def main() -> None:
 
     # --- Build models ---
     # DAE full finetune (unfrozen encoder)
+    dae_encoder = args.dae_encoder if args.dae_encoder else args.dav2_encoder
+
     dae_full = DAE(
-        encoder="vits",
+        encoder=dae_encoder,
         checkpoint=args.dae_checkpoint,
         device=device,
         input_size_width=350,

@@ -20,5 +20,7 @@ cd MScThesis/code
 apptainer exec --nv ../../apptainer/image.sif \
   python -m test_dsec.test_computational_efficiency \
     --dav2-encoder vitl \
+    --dae-encoder vitl \
+    --dae-nopretrain \
     --dav2-checkpoint models/dav2/checkpoints/depth_anything_v2_vitl.pth \
     --output-path test_dsec_output/test_computational_efficiency/summary_vitl.md
