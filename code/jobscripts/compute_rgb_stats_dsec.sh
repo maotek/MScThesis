@@ -9,12 +9,11 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --time=1:00:00
-#SBATCH --gres=gpu:a40:1
 #SBATCH --mem=32000
 
 module use /opt/insy/modulefiles # Use DAIC INSY software collection
-module load cuda cudnn miniconda # Load certain versions of cuda and cudnn
+module load miniconda # Load conda
 
 cd MScThesis/code
 
-apptainer exec --nv ../../apptainer/image.sif python -m test_dsec.compute_rgb_stats
+apptainer exec ../../apptainer/image.sif python -m test_dsec.compute_rgb_stats
