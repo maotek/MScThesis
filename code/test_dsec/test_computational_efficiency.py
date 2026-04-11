@@ -282,6 +282,7 @@ def run_timing(
 
     flops, flops_err = estimate_flops(forward_once, device)
 
+    # Determine how many frames to evaluate on (use all if max_frames <= 0)
     max_eval = len(loader) if max_frames <= 0 else max_frames
 
     peak_mem_fwd = None
@@ -301,6 +302,8 @@ def run_timing(
         if count >= max_eval:
             break
         x = input_getter(sample).to(device)
+
+        # If separate repr/dav2 forwards provided, time them separately. Otherwise time the full model forward.
         if repr_forward is not None and dav2_forward is not None:
             with torch.no_grad():
                 sync_cuda(device)
@@ -314,6 +317,8 @@ def run_timing(
             repr_total += (t1 - t0)
             dav2_total += (t2 - t1)
             total_time += (t2 - t0)
+
+        # No separate forwards provided, time the full forward
         else:
             sync_cuda(device)
             t0 = time.perf_counter()
@@ -324,6 +329,7 @@ def run_timing(
             total_time += (t1 - t0)
         count += 1
 
+    # Convert to milliseconds
     forward_ms = (total_time / max(count, 1)) * 1000.0
     if repr_forward is not None and dav2_forward is not None:
         repr_time = (repr_total / max(count, 1)) * 1000.0
@@ -403,7 +409,6 @@ def main() -> None:
     print(f"Sequence: {seq_name}")
     print(f"DAE loader frames: {len(loader_dae)} | Voxel loader frames: {len(loader_voxel)}")
 
-    # --- Build models ---
     # DAE full finetune (unfrozen encoder)
     dae_encoder = args.dae_encoder if args.dae_encoder else args.dav2_encoder
 
