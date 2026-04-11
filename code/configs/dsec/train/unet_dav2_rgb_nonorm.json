@@ -45,7 +45,7 @@
     "weight_decay": 0.0,
     "clip_distance": 80.0,
     "log_interval": 100,
-    "save_dir": "train_output/train_dsec_unet_dav2_rgb",
+    "save_dir": "train_output/train_dsec_unet_dav2_rgb_nonorm",
     "save_every": 1,
     "ssi_alpha": 0.0,
     "ssi_scales": 4,
@@ -55,7 +55,7 @@
     "grad_weight": 1.0,
     "delta": 0.25,
     "no_validation": false,
-    "wandb_name": "train_dsec_unet_dav2_rgb",
+    "wandb_name": "train_dsec_unet_dav2_rgb_nonorm",
     "inv_prediction": true,
     "inv_prediction_constant": 1.0
   }
