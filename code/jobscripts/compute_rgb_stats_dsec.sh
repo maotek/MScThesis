@@ -8,7 +8,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=1:00:00
+#SBATCH --time=4:00:00
 #SBATCH --mem=32000
 
 module use /opt/insy/modulefiles # Use DAIC INSY software collection
