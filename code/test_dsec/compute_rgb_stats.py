@@ -1,3 +1,4 @@
+import csv
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -69,6 +70,40 @@ class RunningStats:
             "pixels": self.pixels,
             "frames": self.frames,
         }
+
+
+def write_stats_csv(stats_map: dict, out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "representation",
+        "channel",
+        "mean",
+        "std",
+        "var",
+        "min",
+        "max",
+        "pixels",
+        "frames",
+    ]
+    channels = ["R", "G", "B"]
+    with out_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for rep_name, stats in stats_map.items():
+            for idx, ch in enumerate(channels):
+                writer.writerow(
+                    {
+                        "representation": rep_name,
+                        "channel": ch,
+                        "mean": float(stats["mean"][idx]),
+                        "std": float(stats["std"][idx]),
+                        "var": float(stats["var"][idx]),
+                        "min": float(stats["min"][idx]),
+                        "max": float(stats["max"][idx]),
+                        "pixels": int(stats["pixels"]),
+                        "frames": int(stats["frames"]),
+                    }
+                )
 
 
 def build_data_loader_config() -> dict:
@@ -294,6 +329,15 @@ def main() -> None:
         title="DSEC RGB Distribution (FullyConv Output)",
         out_path=OUTPUT_DIR / "dsec_rgb_hist_fc.png",
         total_pixels=raw_stats["pixels"],
+    )
+
+    write_stats_csv(
+        stats_map={
+            "raw": raw_stats,
+            "unet": unet_stats,
+            "fully_conv": fc_stats,
+        },
+        out_path=OUTPUT_DIR / "dsec_rgb_stats.csv",
     )
 
     print(f"\nSaved plots to {OUTPUT_DIR}")
