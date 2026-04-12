@@ -174,7 +174,13 @@ def train_epoch(
     step = 0
 
     for seq_name, data_loader in dataloaders.items():
-        for batch_idx, sample in enumerate(tqdm.tqdm(data_loader, desc=f"Epoch {epoch} {seq_name}")):
+        for batch_idx, sample in enumerate(
+            tqdm.tqdm(
+                data_loader,
+                desc=f"Epoch {epoch} {seq_name}",
+                disable=True,
+            )
+        ):
             target_depth_t = sample["depth"][:, 0, 0].to(device)  # (B,H,W)
             if model_type == "unet_dav2_rgb":
                 events = sample["rgb"][:, 0].to(device)  # (B,C,H,W)
