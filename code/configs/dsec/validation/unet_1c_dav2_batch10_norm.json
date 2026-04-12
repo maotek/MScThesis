@@ -31,7 +31,7 @@
     "model_type": "unet_dav2",
     "input_channels": 5,
     "unet_base_channels": 32,
-    "unet_type": "small1c",
+    "unet_type": "small",
     "dav2_encoder": "vits",
     "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
     "input_size_width": 350,
