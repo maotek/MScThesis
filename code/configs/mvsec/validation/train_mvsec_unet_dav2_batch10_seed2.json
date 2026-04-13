@@ -36,7 +36,7 @@
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true,
-    "checkpoint_path": "train_output/train_mvsec_unet_dav2_batch10_seed2/epoch_005.pt"
+    "checkpoint_path": "train_output/train_mvsec_unet_dav2_batch10_seed2/epoch_050.pt"
   },
   "vis_interval": 200,
   "vis_dir": "evaluate_output/evaluate_mvsec_train_mvsec_unet_dav2_batch10_seed2",
