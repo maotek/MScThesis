@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 
@@ -29,7 +29,8 @@ class E2VIDDav2Composite(torch.nn.Module):
         self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device, input_size_width=input_size_width, input_size_height=input_size_height)
         self.to(self.device)
 
-        self.composite_temp = None  # For debugging and visualizing the composite input
+        self.composite_temp = None  # Backward-compatible alias used by test script
+        self.vis_temp = None
 
     def reset_state(self) -> None:
         self.e2vid.reset_state()
@@ -74,70 +75,7 @@ class E2VIDDav2Composite(torch.nn.Module):
         # intensity = 0 * intensity  # Disable red channel for now
 
         composite = torch.cat([intensity, green, intensity], dim=1)
-        self.composite_temp = composite  # For debugging and visualizing the composite input
+        self.composite_temp = composite.detach().cpu()
+        self.vis_temp = self.composite_temp
         depth = self.dav2(composite)
         return depth
-
-
-class E2VIDDav2Composite2(torch.nn.Module):
-    """Pipeline: voxel-grid events -> E2VID intensity -> Tencode-like RGB -> DAV2 depth.
-
-    - Event pixels use a Tencode-style encoding (red for positive, blue for negative, green for recency).
-    - Pixels without events are filled with the normalized E2VID intensity replicated to 3 channels (grayscale).
-    """
-
-    def __init__(
-        self,
-        e2vid_weights: Optional[str] = None,
-        dav2_encoder: str = "vits",
-        dav2_checkpoint: Optional[str] = None,
-        device: Optional[torch.device] = None,
-    ) -> None:
-        super().__init__()
-        self.device = self._select_device(device)
-        self.e2vid = E2VID(weights_path=e2vid_weights, device=self.device)
-        self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device)
-        self.to(self.device)
-
-    @staticmethod
-    def _select_device(device: Optional[torch.device]) -> torch.device:
-        if device is not None:
-            return device
-        if torch.cuda.is_available():
-            return torch.device("cuda")
-        if torch.backends.mps.is_available():
-            return torch.device("mps")
-        return torch.device("cpu")
-
-    def reset_state(self) -> None:
-        self.e2vid.reset_state()
-
-    @torch.no_grad()
-    def forward(self, events: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        # events: (B,C,H,W) voxel grid ordered from oldest->newest along C
-        intensity = self.e2vid(events)  # (B,1,H,W)
-
-        # Normalize intensity per-frame to 0..1
-        imin = intensity.amin(dim=(2, 3), keepdim=True)
-        imax = intensity.amax(dim=(2, 3), keepdim=True)
-        scale = (imax - imin).clamp(min=1e-8)
-        intensity = (intensity - imin) / scale
-
-        # Use E2VID intensity as base, but make any pixel with events pure black
-        # (no relative normalization). Pixels without events keep the intensity.
-        counts = events.abs().sum(dim=1)  # (B,H,W)
-        overlay = torch.zeros_like(intensity)
-        any_event = counts > 0  # (B,H,W)
-        if any_event.any():
-            mask = any_event.unsqueeze(1).expand_as(overlay)
-            overlay = overlay.clone()
-            overlay[mask] = 1.0
-
-        # Blend only pixels that are black in `overlay`; for other pixels use `intensity`.
-        blend = 0.2 * overlay + 0.8 * intensity
-        mask_black = (overlay == 1.0)
-        merged = torch.where(mask_black, blend, intensity)
-        tencode = merged.repeat(1, 3, 1, 1)
-
-        depth = self.dav2(tencode)
-        return depth, tencode

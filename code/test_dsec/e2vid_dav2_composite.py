@@ -14,7 +14,7 @@ from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events.events_representations import E2vidVoxelGrid
 from datasets.utils import fetch_preprocessing
-from networks.e2vid_dav2_composite import E2VIDDav2Composite, E2VIDDav2Composite2
+from networks.e2vid_dav2_composite import E2VIDDav2Composite
 import matplotlib.pyplot as plt
 
 

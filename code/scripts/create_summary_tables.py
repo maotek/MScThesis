@@ -62,7 +62,22 @@ def generate_tables():
         f.write(md_content)
 
     # --- Generate LaTeX Table ---
-    latex_content = "\\begin{table}[h]\n\\centering\n\\begin{tabular}{|l|c|c|}\n\\hline\n"
+    latex_content = "% Add \\usepackage{longtable} to your LaTeX preamble\n"
+    latex_content += "\\begin{longtable}{|l|c|c|}\n"
+    latex_content += "\\caption{Summary of RMSE linear results.}\n"
+    latex_content += "\\label{tab:rmse_summary} \\\\\n"
+    latex_content += "\\hline\n"
+    latex_content += "\\endfirsthead\n"
+    latex_content += "\\multicolumn{3}{c}%\n"
+    latex_content += "{\\tablename\\ \\thetable{} -- continued from previous page} \\\\\n"
+    latex_content += "\\hline\n"
+    latex_content += "Experiment & DSEC RMSE & MVSEC RMSE \\\\\n"
+    latex_content += "\\hline\n"
+    latex_content += "\\endhead\n"
+    latex_content += "\\hline\n"
+    latex_content += "\\multicolumn{3}{r}{{Continued on next page}} \\\\\n"
+    latex_content += "\\endfoot\n"
+    latex_content += "\\endlastfoot\n"
     latex_content += "Experiment & DSEC RMSE & MVSEC RMSE \\\\\n\\hline\n"
     for item in data:
         experiment_name_escaped = item['experiment'].replace('_', '\\_')
@@ -70,7 +85,7 @@ def generate_tables():
         mvsec_rmse = f"{item['mvsec_rmse']:.4f}" if isinstance(item['mvsec_rmse'], float) else item['mvsec_rmse']
         latex_content += f"{experiment_name_escaped} & {dsec_rmse} & {mvsec_rmse} \\\\\n"
     
-    latex_content += "\\hline\n\\end{tabular}\n\\caption{Summary of RMSE linear results.}\n\\label{tab:rmse_summary}\n\\end{table}"
+    latex_content += "\\hline\n\\end{longtable}"
 
     with open(os.path.join(results_dir, "summary_table.tex"), "w") as f:
         f.write(latex_content)
