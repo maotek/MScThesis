@@ -160,6 +160,21 @@ class RandomCrop(Augmentator):
         self.preserve_mosaicing_pattern = preserve_mosaicing_pattern
 
     @staticmethod
+    def pad_to_min_size(x, output_size):
+        th, tw = output_size
+        h, w = x.shape[-2], x.shape[-1]
+        pad_h = max(0, th - h)
+        pad_w = max(0, tw - w)
+        if pad_h == 0 and pad_w == 0:
+            return x
+
+        pad_top = pad_h // 2
+        pad_bottom = pad_h - pad_top
+        pad_left = pad_w // 2
+        pad_right = pad_w - pad_left
+        return F.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
+
+    @staticmethod
     def get_params(w, h, output_size):
         th, tw = output_size
         assert(th <= h)
@@ -181,6 +196,7 @@ class RandomCrop(Augmentator):
         """
 
         if isinstance(x, dict):
+            x = {key: self.pad_to_min_size(x[key], self.size) for key in x}
             _w = [x[key].shape[-1] for key in x]
             _h = [x[key].shape[-2] for key in x]
 
@@ -192,6 +208,7 @@ class RandomCrop(Augmentator):
 
             i, j, h, w = self.get_params(w, h, self.size)
         else:
+            x = self.pad_to_min_size(x, self.size)
             w, h = x.shape[-1], x.shape[-2]
             i, j, h, w = self.get_params(w, h, self.size)
 
@@ -355,7 +372,7 @@ class RandomScale(Augmentator):
 
     def scale(self, x, scale, is_flow):
         if scale <= 1:
-            transformed = F.interpolate(x.unsqueeze(dim=0), scale_factor=scale, mode='nearest', align_corners=False)
+            transformed = F.interpolate(x.unsqueeze(dim=0), scale_factor=scale, mode='nearest')
         else:
             transformed = F.interpolate(x.unsqueeze(dim=0), scale_factor=scale, mode='bicubic', align_corners=False)
         return transformed.squeeze(dim=0)
