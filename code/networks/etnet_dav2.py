@@ -25,6 +25,7 @@ class ETNetDav2(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.device = device
+        self.vis_temp = None
         self.etnet = ETNet(checkpoint_path=etnet_checkpoint, device=self.device, use_minmax_norm=use_minmax_norm)
         self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device, input_size_width=input_size_width, input_size_height=input_size_height)
         self.to(self.device)
@@ -40,5 +41,6 @@ class ETNetDav2(torch.nn.Module):
             intensity_3ch = intensity.repeat(1, 3, 1, 1)  # (B,3,H,W)
         else:
             intensity_3ch = intensity
+        self.vis_temp = intensity_3ch.detach().cpu()
         depth = self.dav2(intensity_3ch)
         return depth

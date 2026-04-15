@@ -24,6 +24,7 @@ class E2VIDDav2(torch.nn.Module):
     ) -> None:
         super().__init__()
         self.device = device
+        self.vis_temp = None
         self.e2vid = E2VID(weights_path=e2vid_weights, device=self.device)
         self.dav2 = Dav2(encoder=dav2_encoder, checkpoint=dav2_checkpoint, device=self.device, input_size_width=input_size_width, input_size_height=input_size_height)
         self.to(self.device)
@@ -36,5 +37,6 @@ class E2VIDDav2(torch.nn.Module):
         # events: (B,C,H,W)
         intensity = self.e2vid(events)  # (B,1,H,W)
         intensity_3ch = intensity.repeat(1, 3, 1, 1)  # (B,3,H,W)
+        self.vis_temp = intensity_3ch.detach().cpu()
         depth = self.dav2(intensity_3ch)
         return depth
