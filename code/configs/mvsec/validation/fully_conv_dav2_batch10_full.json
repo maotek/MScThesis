@@ -35,7 +35,7 @@
     "input_size_width": 350,
     "input_size_height": 266,
     "freeze_dav2": true,
-    "checkpoint_path": "train_output/train_dsec_fully_conv_dav2_batch10/epoch_050.pt"
+    "checkpoint_path": "train_output/train_dsec_fully_conv_dav2_batch10_full/epoch_050.pt"
   },
   "vis_interval": 200,
   "vis_dir": "evaluate_output/evaluate_mvsec_fully_conv_dav2_batch10_full",
