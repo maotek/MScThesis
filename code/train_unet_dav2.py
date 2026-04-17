@@ -23,7 +23,7 @@ from datasets.DSEC.dsec_dataset import fetch_dataloader as fetch_dsec_dataloader
 from datasets.MVSEC.mvsec_dataset import fetch_dataloader as fetch_mvsec_dataloader
 from evaluation import prepare_target_data_torch
 from losses import MultiScaleGradient, ScaleAndShiftInvariantLoss
-from networks.unet_dav2 import UNetDav2
+from networks.unet_dav2 import NewUNetDav2, UNetDav2
 from networks.fully_conv_dav2 import FullyConvDav2
 
 
@@ -69,7 +69,7 @@ def setup_device_and_seeds(seed: int) -> torch.device:
     return device
 
 
-def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDav2:
+def build_model(model_config: Dict[str, object], device: torch.device) -> torch.nn.Module:
     if str(model_config.get("model_type", "")).lower() == "fully_conv_dav2":
         return FullyConvDav2(
             input_channels=int(model_config.get("input_channels", 5)),
@@ -110,6 +110,21 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> UNetDa
             normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),  # For event-based input, do not apply ImageNet normalization.
             unet_output_channels=int(model_config.get("unet_output_channels", 3)),
         )
+    elif str(model_config.get("model_type", "")).lower() == "newunet_dav2":
+        return NewUNetDav2(
+            input_channels=int(model_config.get("input_channels", 5)),
+            unet_base_channels=int(model_config.get("unet_base_channels", 32)),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
+            unet_output_channels=int(model_config.get("unet_output_channels", 3)),
+            inv_depth_constant_init=float(model_config.get("inv_depth_constant_init", 1.0)),
+        )
+    raise ValueError(f"Unsupported model_type '{model_config.get('model_type')}'")
 
 
 def save_checkpoint(save_dir: str, epoch: int, model: torch.nn.Module, optimizer: torch.optim.Optimizer) -> None:

@@ -31,7 +31,7 @@ datasets/mvsec/data/
 **/**.pt
 wandb/
 evaluate_output/
-evaluate_results/
+evaluate_results*/
 output/
 train_output/
 test_mvsec_output/
