@@ -1,33 +1,4 @@
-## Failed jobs...
-train_dsec_fully_conv_dav2_batch10
-train_dsec_fully_conv_dav2_batch10_ch3
-train_dsec_fully_conv_dav2_batch10_ch3_RC
-train_dsec_fully_conv_dav2_batch10_noinv
-train_dsec_fully_conv_dav2_batch10_RC
-train_dsec_fully_conv_dav2_batch10_RC_noinv
-train_dsec_unet_dav2_batch5
-train_dsec_unet_dav2_batch10_ch8_noinv
-train_dsec_unet_dav2_batch10_ch16_noinv
-train_dsec_unet_dav2_rgb
+## Notes on failed jobs
 
-
-## Succesful jobs
-train_dsec_unet_dav2
-train_dsec_unet_dav2_batch10
-train_dsec_unet_dav2_batch10_ch8
-train_dsec_unet_dav2_batch10_ch8_RC_noinv - RETRAIN
-train_dsec_unet_dav2_batch10_ch16
-train_dsec_unet_dav2_batch10_ch16_nograd
-train_dsec_unet_dav2_batch10_ch16_RC
-train_dsec_unet_dav2_batch10_ch16_RC_noinv - RETRAIN
-train_dsec_unet_dav2_batch20
-train_dsec_unet_small2_dav2_batch5_ch8
-train_dsec_unet_small2_dav2_batch10
-train_dsec_unet_small2_dav2_batch10_ch8
-train_dsec_unet_small2_dav2_batch10_ch16
-train_dsec_unet_small2_dav2_batch5_ch16
-train_dsec_unet_small3_dav2_batch10
-train_dsec_unet_small3_dav2_batch10_ch8
-train_dsec_unet_small3_dav2_batch10_ch16
-
-## Running
+- Some jobs fail randomly because `wandb` tries to read from `stdin` while `tqdm` is also writing to the terminal stream, which can break in non-interactive runs.
+- Solution: Disable the progress bar with `tqdm.tqdm(..., disable=True)`.
