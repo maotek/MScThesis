@@ -218,3 +218,94 @@ class UNetDav2(torch.nn.Module):
         depth = self.dav2(unet_rgb)
             
         return depth
+
+
+class NewUNetDav2(torch.nn.Module):
+    """Pipeline: events -> SmallUNet -> DAV2 inverse-depth -> metric depth.
+
+    Unlike `UNetDav2`, this model performs the inverse-depth conversion internally
+    using a learned scalar offset initialized to 1.0.
+    """
+
+    def __init__(
+        self,
+        input_channels: int = 5,
+        unet_base_channels: int = 32,
+        dav2_encoder: str = "vits",
+        dav2_checkpoint: Optional[str] = None,
+        input_size_width: int = 350,
+        input_size_height: int = 266,
+        freeze_dav2: bool = True,
+        device: torch.device = None,
+        normalize_imagenet: bool = False,
+        unet_output_channels: int = 3,
+        inv_depth_constant_init: float = 1.0,
+    ) -> None:
+        super().__init__()
+        self.device = device
+        self.freeze_dav2 = bool(freeze_dav2)
+        self.in_channels = input_channels
+        self.unet_output_channels = unet_output_channels
+
+        self.vis_temp = None
+        self.unet = SmallUNet(
+            in_channels=input_channels,
+            base_channels=unet_base_channels,
+            out_channels=unet_output_channels,
+        )
+        self.inv_depth_constant = torch.nn.Parameter(torch.tensor(float(inv_depth_constant_init)))
+
+        if dav2_checkpoint is None:
+            dav2_checkpoint = str(
+                Path(__file__).resolve().parents[1]
+                / "models"
+                / "dav2"
+                / "checkpoints"
+                / f"depth_anything_v2_{dav2_encoder}.pth"
+            )
+        checkpoint_path = Path(dav2_checkpoint)
+        if not checkpoint_path.is_file():
+            raise FileNotFoundError(f"DAv2 checkpoint not found: {checkpoint_path}")
+
+        self.dav2 = Dav2(
+            encoder=dav2_encoder,
+            checkpoint=str(checkpoint_path),
+            device=self.device,
+            input_size_width=input_size_width,
+            input_size_height=input_size_height,
+            normalize_imagenet=normalize_imagenet,
+        )
+
+        self.set_dav2_frozen(self.freeze_dav2)
+
+        self.to(self.device)
+
+        print("[NewUNetDav2] DAv2 checkpoint:", str(checkpoint_path))
+        print("[NewUNetDav2] DAv2 encoder:", dav2_encoder)
+        print("[NewUNetDav2] DAv2 frozen:", self.freeze_dav2)
+        print("[NewUNetDav2] Device:", self.device)
+        print("[NewUNetDav2] UNet output channels:", self.unet_output_channels)
+        print("[NewUNetDav2] Normalize ImageNet:", normalize_imagenet)
+        print("[NewUNetDav2] Input size (H,W):", (input_size_height, input_size_width))
+        print("[NewUNetDav2] Inverse-depth offset init:", float(inv_depth_constant_init))
+
+    def set_dav2_frozen(self, freeze: bool = True) -> None:
+        self.freeze_dav2 = bool(freeze)
+        for param in self.dav2.parameters():
+            param.requires_grad = not self.freeze_dav2
+
+    def forward(self, events: torch.Tensor) -> torch.Tensor:
+        assert events.dim() == 4 and events.shape[1] == self.in_channels, f"Expected events of shape (B,{self.in_channels},H,W)"
+
+        events = events.to(self.device)
+        unet_rgb = self.unet(events)
+
+        if self.unet_output_channels == 1:
+            unet_rgb = unet_rgb.repeat(1, 3, 1, 1)
+
+        self.vis_temp = unet_rgb.detach().cpu()
+
+        inv_depth = self.dav2(unet_rgb)
+        inv_depth_constant = torch.clamp(self.inv_depth_constant, min=1e-6)
+        depth = 1.0 / (inv_depth + inv_depth_constant)
+        return depth
