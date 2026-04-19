@@ -112,7 +112,7 @@ def setup_device_and_seeds(args: argparse.Namespace) -> torch.device:
     np.random.seed(args.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("mps")
+    # device = torch.device("mps")
     if device.type == "cuda":
         torch.cuda.manual_seed(args.seed)
     return device
