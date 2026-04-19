@@ -22,7 +22,7 @@ from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from networks.etnet_dav2 import ETNetDav2
 from networks.fully_conv_dav2 import FullyConvDav2
-from networks.unet_dav2 import UNetDav2
+from networks.unet_dav2 import NewUNetDav2, UNetDav2
 from evaluation import (
     add_to_metrics,
     prepare_target_data,
@@ -112,6 +112,7 @@ def setup_device_and_seeds(args: argparse.Namespace) -> torch.device:
     np.random.seed(args.seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("mps")
     if device.type == "cuda":
         torch.cuda.manual_seed(args.seed)
     return device
@@ -270,6 +271,7 @@ def accumulate_metrics(target: Dict[str, float], source: Dict[str, float]) -> Di
 def fetch_model(model_config: Dict[str, object], device: torch.device, representation: str = "") -> object:
     model_name = str(model_config["model_type"])
     if model_name == "dav2":
+        print(f"[evaluate]: Initializing Dav2 model (representation={representation})")
         return Dav2(
             encoder=str(model_config.get("encoder", "vits")),
             checkpoint=model_config.get("checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
@@ -280,6 +282,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             device=device,
         )
     elif model_name == "e2vid_dav2":
+        print("[evaluate]: Initializing E2VIDDav2 model")
         return E2VIDDav2(
             e2vid_weights=model_config.get("e2vid_weights", os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar")),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
@@ -289,6 +292,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             device=device,
         )
     elif model_name == "e2vid_dav2_composite":
+        print("[evaluate]: Initializing E2VIDDav2Composite model")
         return E2VIDDav2Composite(
             e2vid_weights=model_config.get("e2vid_weights", os.path.join("models", "rpg_e2vid", "pretrained", "E2VID_lightweight.pth.tar")),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
@@ -298,6 +302,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             device=device,
         )
     elif model_name == "dae":
+        print("[evaluate]: Initializing DAE model")
         return DAE(
             checkpoint=model_config.get("checkpoint", os.path.join("models", "depthanyevent", "checkpoints", "finetuned_dsec.pth")),
             input_channels=int(model_config.get("input_channels", 3)),
@@ -310,6 +315,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             device=device,
         )
     elif model_name == "etnet_dav2":
+        print("[evaluate]: Initializing ETNetDav2 model")
         return ETNetDav2(
             etnet_checkpoint=model_config.get("etnet_checkpoint", os.path.join("models", "etnet", "checkpoints", "etnet.pth")),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
@@ -319,6 +325,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             device=device,
         )
     elif model_name == "unet_dav2":
+        print("[evaluate]: Initializing UNetDav2 model")
         model = UNetDav2(
             input_channels=int(model_config.get("input_channels", 5)),
             unet_base_channels=int(model_config.get("unet_base_channels", 32)),
@@ -334,15 +341,51 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
         )
         ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dav2", "epoch_050.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
-        unet_state = {
-            k.replace("unet.", ""): v
-            for k, v in state.items()
-            if k.startswith("unet.")
-        }
-        model.unet.load_state_dict(unet_state, strict=True)
+        if any(k.startswith("dav2.") for k in state.keys()):
+            model.load_state_dict(state, strict=True)
+        else:
+            unet_state = {
+                k.replace("unet.", ""): v
+                for k, v in state.items()
+                if k.startswith("unet.")
+            }
+            model.unet.load_state_dict(unet_state, strict=True)
+        return model
+    elif model_name == "newunet_dav2":
+        print(
+            "[evaluate]: Initializing NewUNetDav2 model "
+            f"(inv_depth_constant_init={float(model_config.get('inv_depth_constant_init', 1.0))})"
+        )
+        model = NewUNetDav2(
+            input_channels=int(model_config.get("input_channels", 5)),
+            unet_base_channels=int(model_config.get("unet_base_channels", 32)),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
+            unet_output_channels=int(model_config.get("unet_output_channels", 3)),
+            inv_depth_constant_init=float(model_config.get("inv_depth_constant_init", 1.0)),
+        )
+        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_newunet_dav2", "epoch_050.pt")), map_location="cpu")
+        state = ckpt.get("model_state_dict", ckpt)
+        if any(k.startswith("dav2.") for k in state.keys()):
+            model.load_state_dict(state, strict=True)
+        else:
+            unet_state = {
+                k.replace("unet.", ""): v
+                for k, v in state.items()
+                if k.startswith("unet.")
+            }
+            model.unet.load_state_dict(unet_state, strict=True)
+            if "inv_depth_constant" in state:
+                model.inv_depth_constant.data.copy_(state["inv_depth_constant"])
         return model
     
     elif model_name == "fully_conv_dav2":
+        print("[evaluate]: Initializing FullyConvDav2 model")
         model = FullyConvDav2(
             input_channels=int(model_config.get("input_channels", 5)),
             dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
@@ -356,15 +399,19 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
         )
         ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_dsec_fully_conv_dav2_batch10", "epoch_050.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
-        fc_state = {
-            k.replace("fully_conv.", ""): v
-            for k, v in state.items()
-            if k.startswith("fully_conv.")
-        }
-        model.fully_conv.load_state_dict(fc_state, strict=True)
+        if any(k.startswith("dav2.") for k in state.keys()):
+            model.load_state_dict(state, strict=True)
+        else:
+            fc_state = {
+                k.replace("fully_conv.", ""): v
+                for k, v in state.items()
+                if k.startswith("fully_conv.")
+            }
+            model.fully_conv.load_state_dict(fc_state, strict=True)
         return model
     
     elif model_name == "unet_dav2_rgb":
+        print("[evaluate]: Initializing UNetDav2 RGB model")
         model = UNetDav2(
             input_channels=int(model_config.get("input_channels", 3)),
             unet_base_channels=int(model_config.get("unet_base_channels", 32)),
@@ -380,12 +427,15 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
         )
         ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dav2_rgb", "epoch_030.pt")), map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
-        unet_state = {
-            k.replace("unet.", ""): v
-            for k, v in state.items()
-            if k.startswith("unet.")
-        }
-        model.unet.load_state_dict(unet_state, strict=True)
+        if any(k.startswith("dav2.") for k in state.keys()):
+            model.load_state_dict(state, strict=True)
+        else:
+            unet_state = {
+                k.replace("unet.", ""): v
+                for k, v in state.items()
+                if k.startswith("unet.")
+            }
+            model.unet.load_state_dict(unet_state, strict=True)
         return model
     
     else:
