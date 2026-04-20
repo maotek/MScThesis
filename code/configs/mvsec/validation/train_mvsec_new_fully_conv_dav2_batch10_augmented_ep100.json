@@ -37,13 +37,13 @@
     "freeze_dav2": true,
     "normalize_imagenet": false,
     "inv_depth_constant_init": 1.0,
-    "checkpoint_path": "train_output/train_mvsec_new_fully_conv_dav2_batch10_augmented/epoch_035.pt"
+    "checkpoint_path": "train_output/train_mvsec_new_fully_conv_dav2_batch10_augmented_ep100/epoch_100.pt"
   },
   "vis_interval": 200,
-  "vis_dir": "evaluate_output/evaluate_mvsec_train_mvsec_new_fully_conv_dav2_batch10_augmented",
+  "vis_dir": "evaluate_output/evaluate_mvsec_train_mvsec_new_fully_conv_dav2_batch10_augmented_ep100",
   "use_scaleshift": true,
   "clip_distance": 80.0,
   "inv_prediction": false,
   "inv_prediction_constant": 0.0,
-  "csv_path": "evaluate_results/mvsec_validation_train_mvsec_new_fully_conv_dav2_batch10_augmented.csv"
+  "csv_path": "evaluate_results/mvsec_validation_train_mvsec_new_fully_conv_dav2_batch10_augmented_ep100.csv"
 }
