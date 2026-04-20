@@ -24,7 +24,7 @@ from datasets.MVSEC.mvsec_dataset import fetch_dataloader as fetch_mvsec_dataloa
 from evaluation import prepare_target_data_torch
 from losses import MultiScaleGradient, ScaleAndShiftInvariantLoss
 from networks.unet_dav2 import NewUNetDav2, UNetDav2
-from networks.fully_conv_dav2 import FullyConvDav2
+from networks.fully_conv_dav2 import FullyConvDav2, NewFullyConvDav2
 
 
 def parse_args() -> argparse.Namespace:
@@ -122,6 +122,19 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> torch.
             device=device,
             normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
             unet_output_channels=int(model_config.get("unet_output_channels", 3)),
+            inv_depth_constant_init=float(model_config.get("inv_depth_constant_init", 1.0)),
+        )
+    elif str(model_config.get("model_type", "")).lower() == "new_fully_conv_dav2":
+        return NewFullyConvDav2(
+            input_channels=int(model_config.get("input_channels", 5)),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+            fc_output_channels=int(model_config.get("fc_output_channels", 3)),
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
             inv_depth_constant_init=float(model_config.get("inv_depth_constant_init", 1.0)),
         )
     raise ValueError(f"Unsupported model_type '{model_config.get('model_type')}'")
