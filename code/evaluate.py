@@ -21,7 +21,7 @@ from networks.dav2 import Dav2
 from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from networks.etnet_dav2 import ETNetDav2
-from networks.fully_conv_dav2 import FullyConvDav2
+from networks.fully_conv_dav2 import FullyConvDav2, NewFullyConvDav2
 from networks.unet_dav2 import NewUNetDav2, UNetDav2
 from evaluation import (
     add_to_metrics,
@@ -352,10 +352,7 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             model.unet.load_state_dict(unet_state, strict=True)
         return model
     elif model_name == "newunet_dav2":
-        print(
-            "[evaluate]: Initializing NewUNetDav2 model "
-            f"(inv_depth_constant_init={float(model_config.get('inv_depth_constant_init', 1.0))})"
-        )
+        print("[evaluate]: Initializing NewUNetDav2 model")
         model = NewUNetDav2(
             input_channels=int(model_config.get("input_channels", 5)),
             unet_base_channels=int(model_config.get("unet_base_channels", 32)),
@@ -382,6 +379,16 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
             model.unet.load_state_dict(unet_state, strict=True)
             if "inv_depth_constant" in state:
                 model.inv_depth_constant.data.copy_(state["inv_depth_constant"])
+        if "inv_depth_constant" in state:
+            print(
+                "[evaluate]: Loaded learned inverse-depth constant:",
+                float(model.inv_depth_constant.detach().cpu().item()),
+            )
+        else:
+            print(
+                "[evaluate]: Checkpoint has no learned inverse-depth constant; using init:",
+                float(model.inv_depth_constant.detach().cpu().item()),
+            )
         return model
     
     elif model_name == "fully_conv_dav2":
@@ -408,6 +415,44 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
                 if k.startswith("fully_conv.")
             }
             model.fully_conv.load_state_dict(fc_state, strict=True)
+        return model
+    elif model_name == "new_fully_conv_dav2":
+        print("[evaluate]: Initializing NewFullyConvDav2 model")
+        model = NewFullyConvDav2(
+            input_channels=int(model_config.get("input_channels", 5)),
+            dav2_encoder=str(model_config.get("dav2_encoder", "vits")),
+            dav2_checkpoint=model_config.get("dav2_checkpoint", os.path.join("models", "dav2", "checkpoints", "depth_anything_v2_vits.pth")),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dav2=bool(model_config.get("freeze_dav2", True)),
+            device=device,
+            fc_output_channels=int(model_config.get("fc_output_channels", 3)),
+            normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
+            inv_depth_constant_init=float(model_config.get("inv_depth_constant_init", 1.0)),
+        )
+        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_new_fully_conv_dav2", "epoch_050.pt")), map_location="cpu")
+        state = ckpt.get("model_state_dict", ckpt)
+        if any(k.startswith("dav2.") for k in state.keys()):
+            model.load_state_dict(state, strict=True)
+        else:
+            fc_state = {
+                k.replace("fully_conv.", ""): v
+                for k, v in state.items()
+                if k.startswith("fully_conv.")
+            }
+            model.fully_conv.load_state_dict(fc_state, strict=True)
+            if "inv_depth_constant" in state:
+                model.inv_depth_constant.data.copy_(state["inv_depth_constant"])
+        if "inv_depth_constant" in state:
+            print(
+                "[evaluate]: Loaded learned inverse-depth constant:",
+                float(model.inv_depth_constant.detach().cpu().item()),
+            )
+        else:
+            print(
+                "[evaluate]: Checkpoint has no learned inverse-depth constant; using init:",
+                float(model.inv_depth_constant.detach().cpu().item()),
+            )
         return model
     
     elif model_name == "unet_dav2_rgb":
