@@ -158,7 +158,14 @@ def save_visualization(
 
     save_depth_colormap_with_cbar(os.path.join(seq_dir, f"{idx:05d}_pred.png"), pred_np)
     if vis_temp is not None:
-        save_rgb(os.path.join(seq_dir, f"{idx:05d}_vis_temp.png"), vis_temp.detach().cpu().squeeze(0))
+        vis_temp_cpu = vis_temp.detach().cpu().squeeze(0)
+        vis_temp_min = float(vis_temp_cpu.min())
+        vis_temp_max = float(vis_temp_cpu.max())
+        if vis_temp_max > vis_temp_min:
+            vis_temp_vis = (vis_temp_cpu - vis_temp_min) / (vis_temp_max - vis_temp_min)
+        else:
+            vis_temp_vis = torch.zeros_like(vis_temp_cpu)
+        save_rgb(os.path.join(seq_dir, f"{idx:05d}_vis_temp.png"), vis_temp_vis)
 
 
 def evaluate_sequence(
