@@ -7,6 +7,8 @@ data preprocessing, visualization tools, and depth conversion utilities.
 
 The module supports various depth representations (linear, logarithmic, inverse)
 and provides standard evaluation metrics used in depth estimation research.
+
+Taken from Depth AnyEvent
 """
 
 import numpy as np

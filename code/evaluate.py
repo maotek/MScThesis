@@ -22,7 +22,9 @@ from networks.e2vid_dav2 import E2VIDDav2
 from networks.e2vid_dav2_composite import E2VIDDav2Composite
 from networks.etnet_dav2 import ETNetDav2
 from networks.fully_conv_dav2 import FullyConvDav2, NewFullyConvDav2
+from networks.fully_conv_dae import FullyConvDAE
 from networks.unet_dav2 import NewUNetDav2, UNetDav2
+from networks.unet_dae import UNetDAE
 from evaluation import (
     add_to_metrics,
     prepare_target_data,
@@ -460,6 +462,69 @@ def fetch_model(model_config: Dict[str, object], device: torch.device, represent
                 "[evaluate]: Checkpoint has no learned inverse-depth constant; using init:",
                 float(model.inv_depth_constant.detach().cpu().item()),
             )
+        return model
+    elif model_name == "unet_dae":
+        print("[evaluate]: Initializing UNetDAE model")
+        model = UNetDAE(
+            input_channels=int(model_config.get("input_channels", 5)),
+            unet_base_channels=int(model_config.get("unet_base_channels", 32)),
+            unet_type=str(model_config.get("unet_type", "small")),
+            dae_encoder=str(model_config.get("dae_encoder", model_config.get("encoder", "vits"))),
+            dae_checkpoint=model_config.get("dae_checkpoint", model_config.get("checkpoint", os.path.join("models", "depthanyevent", "weights", "dav2", "finetuned_dsec", "finetuned_dsec.pth"))),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dae=bool(model_config.get("freeze_dae", True)),
+            device=device,
+            unet_output_channels=int(model_config.get("unet_output_channels", 3)),
+            dae_input_channels=int(model_config.get("dae_input_channels", 3)),
+            dae_activation=str(model_config.get("dae_activation", model_config.get("activation", "relu"))),
+            dae_scale_factor=float(model_config.get("dae_scale_factor", model_config.get("scale_factor", 1.0))),
+            dae_inv_prediction=bool(model_config.get("dae_inv_prediction", model_config.get("inv_prediction", True))),
+            freeze_encoder=bool(model_config.get("freeze_encoder", False)),
+            dae_nopretrain=bool(model_config.get("dae_nopretrain", model_config.get("nopretrain", False))),
+        )
+        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_unet_dae", "epoch_050.pt")), map_location="cpu")
+        state = ckpt.get("model_state_dict", ckpt)
+        if any(k.startswith("dae.") for k in state.keys()):
+            model.load_state_dict(state, strict=True)
+        else:
+            unet_state = {
+                k.replace("unet.", ""): v
+                for k, v in state.items()
+                if k.startswith("unet.")
+            }
+            model.unet.load_state_dict(unet_state, strict=True)
+        return model
+    elif model_name == "fully_conv_dae":
+        print("[evaluate]: Initializing FullyConvDAE model")
+        model = FullyConvDAE(
+            input_channels=int(model_config.get("input_channels", 5)),
+            dae_encoder=str(model_config.get("dae_encoder", model_config.get("encoder", "vits"))),
+            dae_checkpoint=model_config.get("dae_checkpoint", model_config.get("checkpoint", os.path.join("models", "depthanyevent", "weights", "dav2", "finetuned_dsec", "finetuned_dsec.pth"))),
+            input_size_width=int(model_config.get("input_size_width", 350)),
+            input_size_height=int(model_config.get("input_size_height", 266)),
+            freeze_dae=bool(model_config.get("freeze_dae", True)),
+            device=device,
+            fc_output_channels=int(model_config.get("fc_output_channels", 3)),
+            dae_input_channels=int(model_config.get("dae_input_channels", 3)),
+            dae_activation=str(model_config.get("dae_activation", model_config.get("activation", "relu"))),
+            dae_scale_factor=float(model_config.get("dae_scale_factor", model_config.get("scale_factor", 1.0))),
+            dae_inv_prediction=bool(model_config.get("dae_inv_prediction", model_config.get("inv_prediction", True))),
+            freeze_encoder=bool(model_config.get("freeze_encoder", False)),
+            dae_nopretrain=bool(model_config.get("dae_nopretrain", model_config.get("nopretrain", False))),
+            apply_sigmoid=bool(model_config.get("apply_sigmoid", True)),
+        )
+        ckpt = torch.load(model_config.get("checkpoint_path", os.path.join("output", "train_fully_conv_dae", "epoch_050.pt")), map_location="cpu")
+        state = ckpt.get("model_state_dict", ckpt)
+        if any(k.startswith("dae.") for k in state.keys()):
+            model.load_state_dict(state, strict=True)
+        else:
+            fc_state = {
+                k.replace("fully_conv.", ""): v
+                for k, v in state.items()
+                if k.startswith("fully_conv.")
+            }
+            model.fully_conv.load_state_dict(fc_state, strict=True)
         return model
     
     elif model_name == "unet_dav2_rgb":
