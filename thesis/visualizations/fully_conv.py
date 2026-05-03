@@ -65,32 +65,16 @@ arch = [
         name='legend_conv',
         s_filer="",
         n_filer=("", ""),
-        offset="(6.0,-8.0,0)",
+        offset="(9.0,-8.0,0)",
         to="(0,0,0)",
-        width=(1, 0.3),
+        width=(1, 0),
         height=6,
         depth=6,
         caption=""
     ),
     r"""
     \node[font=\small, align=center] 
-    at (legend_conv-south) [below=8pt] {Dilated Conv + nm + LeakyReLU};
-    """,
-
-    to_Conv(
-        name="legend_out",
-        s_filer="",
-        n_filer="",
-        offset="(4.0,0,0)",
-        to="(legend_conv-east)",
-        width=1,
-        height=6,
-        depth=6,
-        caption=""
-    ),
-    r"""
-    \node[font=\small, align=center] 
-    at (legend_out-south) [below=8pt] {1×1 Conv};
+    at (legend_conv-south) [below=8pt] {Dilated Conv + norm + LeakyReLU};
     """,
 
     to_end()
