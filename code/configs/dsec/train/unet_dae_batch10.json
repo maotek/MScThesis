@@ -59,7 +59,7 @@
     "grad_num_scales": 4,
     "grad_weight": 1.0,
     "delta": 0.25,
-    "no_validation": false,
+    "no_validation": true,
     "wandb_name": "train_dsec_unet_dae_batch10",
     "inv_prediction": false,
     "inv_prediction_constant": 1.0
