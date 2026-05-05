@@ -97,6 +97,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> torch.
             device=device,
             normalize_imagenet=bool(model_config.get("normalize_imagenet", True)),  # For RGB input, apply ImageNet normalization.
             unet_output_channels=int(model_config.get("unet_output_channels", 3)),
+            unet_output_activation=str(model_config.get("unet_output_activation", "sigmoid")),
         )
     elif str(model_config.get("model_type", "")).lower() == "unet_dav2":
         return UNetDav2(
@@ -111,6 +112,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> torch.
             device=device,
             normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),  # For event-based input, do not apply ImageNet normalization.
             unet_output_channels=int(model_config.get("unet_output_channels", 3)),
+            unet_output_activation=str(model_config.get("unet_output_activation", "sigmoid")),
         )
     elif str(model_config.get("model_type", "")).lower() == "newunet_dav2":
         return NewUNetDav2(
@@ -124,6 +126,7 @@ def build_model(model_config: Dict[str, object], device: torch.device) -> torch.
             device=device,
             normalize_imagenet=bool(model_config.get("normalize_imagenet", False)),
             unet_output_channels=int(model_config.get("unet_output_channels", 3)),
+            unet_output_activation=str(model_config.get("unet_output_activation", "sigmoid")),
             inv_depth_constant_init=float(model_config.get("inv_depth_constant_init", 1.0)),
         )
     elif str(model_config.get("model_type", "")).lower() == "new_fully_conv_dav2":
