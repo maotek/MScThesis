@@ -25,7 +25,7 @@ def parse_args() -> argparse.Namespace:
         "sequence",
         type=str,
         nargs="?",
-        default="datasets/DSEC/data/validation/interlaken_00_f",
+        default="datasets/DSEC/data/validation/interlaken_00_g",
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
@@ -55,7 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--unet-checkpoint",
         type=str,
-        default=os.path.join("output", "train_unet_dav2", "epoch_001.pt"),
+        default=os.path.join("output", "train_unet_dav2", "epoch_050.pt"),
         help="Optional checkpoint containing UNet weights.",
     )
     parser.add_argument(
@@ -77,6 +77,39 @@ def append_checkpoint_to_output_dir(output_dir: str, checkpoint_path: str) -> st
         return output_dir
     ckpt_name = Path(checkpoint_path).stem
     return f"{output_dir}_{ckpt_name}"
+
+
+def tensor_bytes(state: dict) -> int:
+    return sum(v.numel() * v.element_size() for v in state.values() if torch.is_tensor(v))
+
+
+def extract_unet_state(state: dict, model: UNetDav2) -> dict:
+    if any(k.startswith("unet.") for k in state):
+        return {
+            k.removeprefix("unet."): v
+            for k, v in state.items()
+            if k.startswith("unet.")
+        }
+
+    # Backward compatibility with older scripts/checkpoints.
+    if any(k.startswith("concentrator.") for k in state):
+        return {
+            k.removeprefix("concentrator."): v
+            for k, v in state.items()
+            if k.startswith("concentrator.")
+        }
+
+    # Some checkpoints may contain only model.unet.state_dict().
+    expected_keys = set(model.unet.state_dict().keys())
+    raw_unet_state = {k: v for k, v in state.items() if k in expected_keys}
+    if raw_unet_state:
+        return raw_unet_state
+
+    sample_keys = ", ".join(list(state.keys())[:10])
+    raise RuntimeError(
+        "Could not find UNet weights in checkpoint. Expected keys prefixed with "
+        f"'unet.' or 'concentrator.', or raw UNet keys. First keys: {sample_keys}"
+    )
 
 
 def visualize(
@@ -190,14 +223,10 @@ def main() -> None:
     if args.unet_checkpoint:
         ckpt = torch.load(args.unet_checkpoint, map_location="cpu")
         state = ckpt.get("model_state_dict", ckpt)
-        unet_state = {
-            k.replace("concentrator.", ""): v
-            for k, v in state.items()
-            if k.startswith("concentrator.")
-        }
-        total_bytes = sum(t.numel() * t.element_size() for t in state.values())
-        unet_bytes = sum(t.numel() * t.element_size() for t in unet_state.values())
-        dav2_bytes = sum(t.numel() * t.element_size() for k, t in state.items() if k.startswith("dav2."))
+        unet_state = extract_unet_state(state, model)
+        total_bytes = tensor_bytes(state)
+        unet_bytes = tensor_bytes(unet_state)
+        dav2_bytes = tensor_bytes({k: v for k, v in state.items() if k.startswith("dav2.")})
         print(f"Total weights size: {total_bytes / (1024 * 1024):.2f} MB")
         print(f"UNet weights size: {unet_bytes / (1024 * 1024):.2f} MB")
         print(f"DAv2 weights size: {dav2_bytes / (1024 * 1024):.2f} MB")

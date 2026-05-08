@@ -8,7 +8,6 @@ from evaluation import add_to_metrics
 
 import numpy as np
 import torch
-
 from datasets.DSEC.constants import DSEC_HEIGHT, DSEC_WIDTH
 from datasets.DSEC.sbt.dsec_sequence import DsecSequence
 from datasets.events import Tencode, TencodePixelCount
@@ -17,6 +16,7 @@ from networks.dav2 import Dav2
 from evaluation import prepare_target_data_torch, prepare_target_data
 from losses import normalized_depth_scale_and_shift
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 from util import depth_to_colormap, rgb_to_uint8, save_depth_colormap_with_cbar, save_image, save_rgb
 
@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
         help="Path to a DSEC sequence root",
     )
     parser.add_argument(
-        "--index", type=int, default=100, help="Index within the sequence to visualize (depth-aligned events)."
+        "--index", type=int, default=350, help="Index within the sequence to visualize (depth-aligned events)."
     )
     parser.add_argument(
         "--encoder",
@@ -59,6 +59,73 @@ def parse_args() -> argparse.Namespace:
 def ensure_dir(path: str) -> str:
     Path(path).mkdir(parents=True, exist_ok=True)
     return path
+
+
+def finite_limits(arr: np.ndarray, fallback: tuple[float, float] = (0.0, 1.0)) -> tuple[float, float]:
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return fallback
+    vmin = float(finite.min())
+    vmax = float(finite.max())
+    if vmax - vmin < 1e-8:
+        return fallback
+    return vmin, vmax
+
+
+def finite_for_plot(arr: np.ndarray, fill_value: float) -> np.ndarray:
+    return np.nan_to_num(arr, nan=fill_value, posinf=fill_value, neginf=fill_value)
+
+
+def save_constant_comparison(sample: dict, raw_pred: np.ndarray, out_dir: str, idx: int) -> None:
+    events = sample["depth_aligned_events"][0].detach().cpu().numpy()
+    input_rgb = np.transpose(np.clip(events, 0.0, 1.0), (1, 2, 0))
+
+    raw_vmin, raw_vmax = finite_limits(raw_pred)
+    converted = [
+        ("1/(raw + 1)", 1.0 / (raw_pred + 1.0)),
+        ("1/(raw + 10)", 1.0 / (raw_pred + 10.0)),
+        ("1/(raw + 0.1)", 1.0 / (raw_pred + 0.1)),
+    ]
+
+    panels = [("Input", input_rgb, "rgb", (0.0, 1.0))]
+    panels.append(("Raw", raw_pred, "viridis", (raw_vmin, raw_vmax)))
+    for title, arr in converted:
+        vmin, vmax = finite_limits(arr)
+        panels.append((title, arr, "viridis", (vmin, vmax)))
+
+    fig = plt.figure(figsize=(18, 3.2))
+    grid = ImageGrid(
+        fig,
+        111,
+        nrows_ncols=(1, len(panels)),
+        axes_pad=0.35,
+        cbar_mode="each",
+        cbar_location="right",
+        cbar_pad=0.04,
+        cbar_size="4%",
+    )
+
+    for ax, cax, (title, arr, cmap, limits) in zip(grid, grid.cbar_axes, panels):
+        vmin, vmax = limits
+        if cmap == "rgb":
+            ax.imshow(arr)
+            cax.set_visible(False)
+        else:
+            img = finite_for_plot(arr, fill_value=vmax)
+            im = ax.imshow(img, cmap=cmap, vmin=vmin, vmax=vmax)
+            fig.colorbar(im, cax=cax)
+
+        ax.set_title(title, fontsize=10)
+        ax.axis("off")
+        cax.tick_params(labelsize=8)
+
+    fig.savefig(
+        os.path.join(out_dir, f"{idx:05d}_dav2_constant_comparison.png"),
+        dpi=300,
+        bbox_inches="tight",
+        pad_inches=0.02,
+    )
+    plt.close(fig)
 
 
 def visualize(sample: dict, pred_np: np.ndarray, pred_np_raw: np.ndarray, target_np: np.ndarray, out_dir: str, idx: int) -> None:
@@ -163,7 +230,7 @@ def main() -> None:
         device=device,
         input_size_height=266,
         input_size_width=350,
-        rgb=False,
+        normalize_imagenet=False,
     )
 
     events = sample["depth_aligned_events"][0].unsqueeze(0).to(device)
@@ -171,6 +238,13 @@ def main() -> None:
     # events= torch.load(os.path.join(args.output_dir, f"{args.index:05d}_events_tensor.pt"))
 
     depth_pred = model(events).squeeze(1)  # [B,H,W]
+    raw_dav2_np = depth_pred.detach().cpu().squeeze().numpy()
+    save_depth_colormap_with_cbar(
+        os.path.join(out_dir, f"{args.index:05d}_dav2_raw_output.png"),
+        raw_dav2_np,
+        label="Raw DAv2 output",
+    )
+    save_constant_comparison(sample, raw_dav2_np, out_dir, args.index)
 
     depth_pred = 1.0 / (depth_pred + 1) # Convert from inverse depth to depth in meters
     # depth_pred = torch.clamp(depth_pred, 0.0, 80.0)

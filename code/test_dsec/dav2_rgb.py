@@ -156,7 +156,7 @@ def main() -> None:
         device=device,
         input_size_height=266,
         input_size_width=350,
-        rgb=True,
+        normalize_imagenet=True,
     )
 
     rgb = sample["rgb"][0].unsqueeze(0).to(device)

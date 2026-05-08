@@ -196,7 +196,7 @@ def load_dav2_model(args: argparse.Namespace, device: torch.device) -> Dav2:
         device=device,
         input_size_width=350,
         input_size_height=266,
-        rgb=False,
+        normalize_imagenet=False,
     )
     model.eval()
     return model
