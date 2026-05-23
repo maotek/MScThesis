@@ -45,7 +45,14 @@ class Dav2(torch.nn.Module):
         self.encoder = encoder
         self.input_size_height = input_size_height
         self.input_size_width = input_size_width
-        self.device = device
+        if device is None:
+            if torch.cuda.is_available():
+                device = torch.device("cuda")
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                device = torch.device("mps")
+            else:
+                device = torch.device("cpu")
+        self.device = torch.device(device)
         self.normalize_imagenet = normalize_imagenet
         self.use_torch_preprocess = bool(use_torch_preprocess)
 
@@ -60,11 +67,11 @@ class Dav2(torch.nn.Module):
         cfg = MODEL_CONFIGS[encoder]
         self.model = DepthAnythingV2(encoder=encoder, **cfg)
         self.model.load_state_dict(torch.load(checkpoint, map_location="cpu"))
-        self.model.to(self.device)
-        self.model.eval()
 
         self.register_buffer("imagenet_mean", torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
         self.register_buffer("imagenet_std", torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
+        self.to(self.device)
+        self.model.eval()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass.
@@ -133,6 +140,7 @@ class Dav2(torch.nn.Module):
         """Torch-only inference path that preserves gradients."""
         assert x.dim() == 4 and x.shape[1] == 3, "Expected x of shape (B,3,H,W)"
         orig_hw = x.shape[-2:]
+        x = x.to(self.device)
 
         h, w = orig_hw
         scale = max(self.input_size_height / float(h), self.input_size_width / float(w))
