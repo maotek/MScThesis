@@ -269,7 +269,7 @@ def add_panel(
         title,
         ha="center",
         va="bottom",
-        fontsize=8,
+        fontsize=14,
         linespacing=0.9,
     )
     ax.axis("off")
@@ -304,16 +304,19 @@ def save_teaser(
     image_h, image_w = target.shape
     n_cols = 5
     fig_w = 18.5
-    margin_x = 0.12
-    margin_y = 0.08
+    margin_x = 0.08
+    margin_y = 0.05
     title_h = 0.28
-    col_gap = 0.20
-    row_gap = 0.22
+    col_gap = 0.06
+    row_gap = 0.06
     cbar_w = 0.07
     cbar_pad = 0.03
     cbar_label_w = 0.25
-    cell_w = (fig_w - 2 * margin_x - (n_cols - 1) * col_gap) / n_cols
-    panel_w = cell_w - cbar_w - cbar_pad - cbar_label_w
+    cbar_space_w = cbar_w + cbar_pad + cbar_label_w
+    cbar_cols = n_cols - 1
+    panel_w = (
+        fig_w - 2 * margin_x - (n_cols - 1) * col_gap - cbar_cols * cbar_space_w
+    ) / n_cols
     panel_h = panel_w * image_h / image_w
     fig_h = 2 * panel_h + 2 * title_h + row_gap + 2 * margin_y
     fig = plt.figure(figsize=(fig_w, fig_h))
@@ -321,7 +324,7 @@ def save_teaser(
     def panel_position(row: int, col: int) -> tuple[float, float, float, float]:
         top_row_bottom = margin_y + panel_h + title_h + row_gap
         bottom = top_row_bottom if row == 0 else margin_y
-        left = margin_x + col * (cell_w + col_gap)
+        left = margin_x + col * (panel_w + col_gap) + min(col, cbar_cols) * cbar_space_w
         return left / fig_w, bottom / fig_h, panel_w / fig_w, panel_h / fig_h
 
     add_panel(
@@ -332,7 +335,7 @@ def save_teaser(
     )
     add_panel(
         fig,
-        *panel_position(0, 1),
+        *panel_position(1, 0),
         target,
         "GT LiDAR",
         cmap="viridis",
@@ -344,7 +347,7 @@ def save_teaser(
     )
     add_panel(
         fig,
-        *panel_position(0, 2),
+        *panel_position(0, 1),
         dae_pred,
         "DAE prediction",
         cmap="viridis",
@@ -356,7 +359,7 @@ def save_teaser(
     )
     add_panel(
         fig,
-        *panel_position(0, 3),
+        *panel_position(0, 2),
         unet_pred,
         "U-Net prediction",
         cmap="viridis",
@@ -368,9 +371,9 @@ def save_teaser(
     )
     add_panel(
         fig,
-        *panel_position(0, 4),
+        *panel_position(0, 3),
         fc_pred,
-        "FullyConv prediction",
+        "Fully Convolutional prediction",
         cmap="viridis",
         vmin=0.0,
         vmax=clip_distance,
@@ -378,15 +381,25 @@ def save_teaser(
         cbar_pad=cbar_pad / fig_w,
         cbar_width=cbar_w / fig_w,
     )
-    add_panel(fig, *panel_position(1, 0), rgb_image(unet_recon), "U-Net reconstruction")
-    add_panel(fig, *panel_position(1, 1), rgb_image(fc_recon), "FullyConv reconstruction")
 
     add_panel(
         fig,
-        *panel_position(1, 2),
+        *panel_position(1, 1),
         dae_error,
-        f"DAE error\nRMSE {dae_rmse:.2f} m",
-        cmap="magma",
+        f"DAE RMSE {dae_rmse:.2f} m",
+        cmap="turbo",
+        vmin=0.0,
+        vmax=error_vmax,
+        cbar=True,
+        cbar_pad=cbar_pad / fig_w,
+        cbar_width=cbar_w / fig_w,
+    )
+    add_panel(
+        fig,
+        *panel_position(1, 2),
+        unet_error,
+        f"U-Net RMSE {unet_rmse:.2f} m",
+        cmap="turbo",
         vmin=0.0,
         vmax=error_vmax,
         cbar=True,
@@ -396,27 +409,17 @@ def save_teaser(
     add_panel(
         fig,
         *panel_position(1, 3),
-        unet_error,
-        f"U-Net error\nRMSE {unet_rmse:.2f} m",
-        cmap="magma",
-        vmin=0.0,
-        vmax=error_vmax,
-        cbar=True,
-        cbar_pad=cbar_pad / fig_w,
-        cbar_width=cbar_w / fig_w,
-    )
-    add_panel(
-        fig,
-        *panel_position(1, 4),
         fc_error,
-        f"FullyConv error\nRMSE {fc_rmse:.2f} m",
-        cmap="magma",
+        f"Fully Convolutional RMSE {fc_rmse:.2f} m",
+        cmap="turbo",
         vmin=0.0,
         vmax=error_vmax,
         cbar=True,
         cbar_pad=cbar_pad / fig_w,
         cbar_width=cbar_w / fig_w,
     )
+    add_panel(fig, *panel_position(0, 4), rgb_image(unet_recon), "U-Net reconstruction")
+    add_panel(fig, *panel_position(1, 4), rgb_image(fc_recon), "Fully Convolutional reconstruction")
 
     fig.savefig(out_path, dpi=300)
     plt.close(fig)
