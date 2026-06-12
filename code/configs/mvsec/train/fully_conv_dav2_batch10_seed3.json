@@ -1,0 +1,60 @@
+{
+  "data_loader": {
+    "dataset": "mvsec",
+    "datapath": "datasets/MVSEC/data",
+    "split": "train",
+    "concatenate_sequences": false,
+    "event_representation": {
+      "representation_type": "voxelgrid",
+      "channels": 5,
+      "height": 260,
+      "width": 346,
+      "normalize": true
+    },
+    "preprocessing": [
+      {
+        "preprocessing_type": "Crop",
+        "height": 260,
+        "width": 346
+      }
+    ],
+    "load_images": false,
+    "batch_size": 10,
+    "num_workers": 1,
+    "pin_memory": true,
+    "shuffle": true,
+    "sequence_window": 1,
+    "sequence_step": 1,
+    "time_window_ms": 50
+  },
+  "model": {
+    "model_type": "fully_conv_dav2",
+    "input_channels": 5,
+    "dav2_encoder": "vits",
+    "dav2_checkpoint": "models/dav2/checkpoints/depth_anything_v2_vits.pth",
+    "input_size_width": 350,
+    "input_size_height": 266,
+    "freeze_dav2": true,
+    "normalize_imagenet": false
+  },
+  "training": {
+    "epochs": 50,
+    "lr": 0.0001,
+    "weight_decay": 0.0,
+    "clip_distance": 80.0,
+    "log_interval": 100,
+    "save_dir": "train_output/train_mvsec_fully_conv_dav2_batch10_seed3",
+    "save_every": 1,
+    "ssi_alpha": 0.0,
+    "ssi_scales": 4,
+    "ssi_reduction": "batch",
+    "grad_start_scale": 1,
+    "grad_num_scales": 4,
+    "grad_weight": 1.0,
+    "delta": 0.25,
+    "no_validation": false,
+    "wandb_name": "train_mvsec_fully_conv_dav2_batch10_seed3",
+    "inv_prediction": true,
+    "inv_prediction_constant": 1.0
+  }
+}
