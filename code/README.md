@@ -2,24 +2,107 @@
 
 This folder contains training and evaluation pipelines for event-based depth models on DSEC and MVSEC.
 
-## Quick Start
+## Setup
 
-Run these commands from the `code/` directory.
+Run all project commands from the `code/` directory. The configs use relative
+paths, so running from another directory will make datasets and checkpoints look
+missing.
 
-### 1) Create environment
+### 1) Create and activate the environment
+
+From the repository root:
+
 ```bash
+cd code
 conda env create -f environment/environment.yml
-```
-
-### 2) Activate environment
-```bash
 conda activate apptainer
 ```
 
-### 3) Download DSEC data
+If the environment already exists, update it instead:
+
 ```bash
-python -m scripts.download_dsec
+conda env update -f environment/environment.yml --prune
+conda activate apptainer
 ```
+
+The environment installs the PyTorch CUDA 12.3 wheels from
+`environment/requirements.txt`. If your machine uses a different CUDA setup,
+install the matching PyTorch build before running training or evaluation.
+
+### 2) Put data in the expected locations
+
+All dataset paths are relative to `code/`. The validation and training configs
+expect this layout:
+
+```text
+code/
+  datasets/
+    DSEC/
+      data/
+        train/<sequence>/
+        validation/<sequence>/
+    MVSEC/
+      data/
+        train/<sequence>/
+        test/<sequence>/
+```
+
+Create the top-level directories if they do not exist:
+
+```bash
+mkdir -p datasets/DSEC/data datasets/MVSEC/data
+```
+
+For full table reproduction, download all DSEC and MVSEC splits:
+
+```bash
+python -m scripts.download_dsec --split all --out datasets/DSEC/data
+python -m scripts.download_mvsec --split all --stage all --out datasets/MVSEC/data
+```
+
+For evaluation-only runs, use the split needed by the config you are running:
+DSEC configs read from `datasets/DSEC/data`, and MVSEC configs read from
+`datasets/MVSEC/data`.
+
+### 3) Put model weights and checkpoints in place
+
+The Depth Anything V2 backbone checkpoint should be placed under:
+
+```text
+models/dav2/checkpoints/depth_anything_v2_vits.pth
+```
+
+The DAE validation configs expect the Depth AnyEvent checkpoints here:
+
+```text
+models/depthanyevent/weights/dav2/finetuned_dsec/finetuned_dsec.pth
+models/depthanyevent/weights/dav2/finetuned_mvsec/finetuned_mvsec.pth
+```
+
+Trainable adapter checkpoints are read from `train_output/<run_name>/`. For
+example:
+
+```text
+train_output/train_dsec_unet_dav2_batch10/epoch_050.pt
+train_output/train_mvsec_fully_conv_dav2_batch10/epoch_050.pt
+```
+
+You can create these checkpoints by running the training configs, or download
+the checkpoints used for reproducing Tables 1-4 from Google Drive:
+
+https://drive.google.com/drive/folders/141tTRwiy9V2DUP21tcBa4q42HQ0XpqRl?usp=sharing
+
+Place the downloaded run directories under `train_output/` so the config paths
+continue to resolve. If you have DAIC access, you can also fetch checkpoints
+from the remote:
+
+```bash
+mkdir -p train_output
+bash scripts/download_weights.sh --password '<password>' --file epoch_050.pt
+```
+
+After the datasets and checkpoints are present, use the commands below for
+training, single-config evaluation, or reproducing paper tables.
 
 ## Commands By Config
 
